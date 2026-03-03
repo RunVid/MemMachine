@@ -6,8 +6,11 @@ This complements structured facts extraction by focusing on personal insights ra
 """
 
 from memmachine.semantic_memory.semantic_model import (
+    RawSemanticPrompt,
     SemanticCategory,
-    StructuredSemanticPrompt,
+)
+from memmachine.semantic_memory.util.semantic_prompt_template import (
+    build_update_prompt,
 )
 
 # Life-oriented personal context tags
@@ -185,11 +188,134 @@ life_context_description = """
     one-time event or temporary state, it belongs in episodic memory, not semantic memory.
 """
 
+# Custom consolidation prompt for life-oriented personal context
+life_context_consolidation_prompt = """
+    Your job is to perform memory consolidation for a life-oriented personal context memory system.
+    Despite the name, consolidation is not solely about reducing the amount of memories, but rather, minimizing interference between personal insights while maintaining psychological profile integrity and life understanding.
+    By consolidating memories, we remove unnecessary couplings of personal information from context, spurious correlations inherited from the circumstances of their acquisition.
+
+    You will receive a set of life-oriented personal context memories which are semantically similar (same tag and feature name).
+    Produce a new list of memories to keep.
+
+    A memory is a json object with 4 fields:
+    - tag: broad category of memory (interests, lifestyle, goals, personality, life_situation)
+    - feature: feature name (e.g., "PRIMARY INTEREST", "CAREER GOAL", "COMMUNICATION STYLE")
+    - value: detailed contents of the memory
+    - metadata: object with 1 field
+    -- id: integer
+
+    You will output consolidated memories, which are json objects with 4 fields:
+    - tag: string (must be one of: interests, lifestyle, goals, personality, life_situation)
+    - feature: string (must follow FEATURE NAMING RULES below)
+    - value: string (detailed contents)
+    - metadata: object with 1 field
+    -- citations: list of ids of old memories which influenced this one
+
+    You will also output a list of old memories to keep (memories are deleted by default).
+
+    CRITICAL TAG RULES:
+    - You MUST ONLY use the tags defined in the tags list: interests, lifestyle, goals, personality, life_situation
+    - DO NOT create new tags - if information doesn't fit perfectly, choose the closest matching tag
+    - Tag selection guidance:
+      * Personal interests/hobbies → "interests"
+      * Daily routines/habits/patterns → "lifestyle"
+      * Aspirations/objectives/plans → "goals"
+      * Character traits/behavioral patterns → "personality"
+      * Current circumstances/context → "life_situation"
+
+    FEATURE NAMING RULES (MUST FOLLOW):
+    - Use UPPERCASE letters with SPACES between words (e.g., "PRIMARY INTEREST", "CAREER GOAL")
+    - Use full words, not abbreviations
+    - Be descriptive and meaningful - capture the essence of the characteristic
+
+    Standard Feature Names:
+    - Interests: "PRIMARY INTEREST", "PASSION", "HOBBY"
+    - Lifestyle: "WORK LIFE BALANCE STYLE", "EXERCISE HABIT", "FITNESS ROUTINE", "SLEEP PATTERN"
+    - Goals: "CAREER GOAL", "LONG TERM GOAL", "HEALTH GOAL", "FINANCIAL GOAL", "LIFE VISION"
+    - Personality: "COMMUNICATION STYLE", "DECISION MAKING STYLE", "STRESS MANAGEMENT APPROACH", "INTROVERSION LEVEL", "STRESS RESPONSE PATTERN", "PERSONALITY TYPE"
+    - Life Context: "CURRENT LIFE STAGE", "CORE VALUE", "PRIORITY"
+
+    CONSOLIDATION GUIDELINES:
+
+    1. **Identical Information (Same Value & Meaning)**: 
+       - If memories have identical values and meanings, DELETE duplicates and KEEP only one
+       - Example: Multiple "PRIMARY INTEREST" features with value "photography" → Keep one, delete others
+
+    2. **Different Information (Different Aspect or Evolution)**:
+       - If memories have different values for the same feature name, they represent different aspects or evolution
+       - For goals: Different goals should be kept separate (e.g., "CAREER GOAL" vs "HEALTH GOAL")
+       - For personality traits: If values represent evolution or refinement, KEEP the most complete/current version
+       - Example: "CAREER GOAL": "become a manager" and "CAREER GOAL": "become a senior manager" → 
+         Keep "CAREER GOAL": "become a senior manager" (more complete), delete the older one
+
+    3. **Synonym Consolidation**:
+       - If memories have the same meaning but different feature names (synonyms), consolidate to use the standard feature name
+       - Example: "MAIN HOBBY": "photography" and "PRIMARY INTEREST": "photography" → 
+         Keep "PRIMARY INTEREST": "photography", delete "MAIN HOBBY"
+
+    4. **Redundant Information**:
+       - Memories containing only redundant information should be deleted entirely
+       - If information has been processed into a more complete memory, delete the incomplete versions
+       - Example: "GOAL": "career advancement" and "CAREER GOAL": "advance to senior management role" → 
+         Keep "CAREER GOAL" (more specific), delete generic "GOAL"
+
+    5. **Feature Name Synchronization**:
+       - If memories are sufficiently similar but differ in key details, synchronize their feature names
+       - Use consistent naming across similar memories
+       - Keep only the key details (highest-entropy) in the feature name. The nuances go in the value field
+       - Example: "GOAL": "health improvement" and "HEALTH GOAL": "lose weight and exercise more" → 
+         Keep "HEALTH GOAL": "lose weight and exercise more" (more specific), delete generic "GOAL"
+
+    6. **Multiple Aspects Handling**:
+       - If memories represent different aspects of the same type, keep them separate with appropriate names
+       - Example: "CAREER GOAL": "become a manager" and "ENTREPRENEURIAL GOAL": "start a side business" → 
+         Keep both (different aspects)
+       - Don't merge different aspects into a single memory unless they naturally belong together
+
+    7. **Personality and Lifestyle Evolution**:
+       - For personality traits and lifestyle patterns, if values represent evolution or refinement:
+         * Keep the most complete/current version
+         * If both are valuable, merge insights into a single comprehensive memory
+       - Example: "COMMUNICATION STYLE": "direct" and "COMMUNICATION STYLE": "direct and concise" → 
+         Keep "COMMUNICATION STYLE": "direct and concise" (more complete)
+
+    Overall memory life-cycle:
+    raw personal insights -> extracted characteristics -> characteristics sorted by tag -> consolidated life profiles
+
+    The more memories you receive, the more interference there is in the memory system.
+    This causes cognitive load. Cognitive load is bad.
+    To minimize this, under such circumstances, you need to be more aggressive about deletion:
+        - Be looser about what you consider to be similar. Some distinctions are not worth the energy to maintain.
+        - Massage out the parts to keep and ruthlessly throw away the rest
+        - There is no free lunch here! At least some information must be deleted!
+
+    Do not create new tag names. Only use: interests, lifestyle, goals, personality, life_situation.
+
+    Remember: Focus on consolidating personal insights that help understand the user deeply. 
+    Preserve meaningful distinctions while removing redundant information.
+
+    The proper noop syntax is:
+    {
+        "consolidate_memories": [],
+        "keep_memories": []
+    }
+
+    The final output schema is:
+    <think> insert your chain of thought here. </think>
+    {
+        "consolidate_memories": list of new memories to add,
+        "keep_memories": list of ids of old memories to keep
+    }
+"""
+
 LifeContextSemanticCategory = SemanticCategory(
     name="profile_life_context",
-    prompt=StructuredSemanticPrompt(
+    prompt=RawSemanticPrompt(
+        update_prompt=build_update_prompt(
         tags=life_context_tags,
         description=life_context_description,
+        ),
+        consolidation_prompt=life_context_consolidation_prompt,
     ),
 )
 

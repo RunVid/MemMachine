@@ -33,7 +33,10 @@ from memmachine.common.resource_manager.resource_manager import ResourceManagerI
 from memmachine.common.session_manager.session_data_manager import SessionDataManager
 from memmachine.episodic_memory import EpisodicMemory
 from memmachine.semantic_memory.semantic_model import FeatureIdT, SemanticFeature
-from memmachine.semantic_memory.semantic_session_manager import IsolationType
+from memmachine.semantic_memory.semantic_session_manager import (
+    ALL_MEMORY_TYPES as ALL_ISOLATION_TYPES,
+    IsolationType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -359,9 +362,23 @@ class MemMachine:
 
         if MemoryType.Semantic in target_memories:
             semantic_session = await self._resources.get_semantic_session_manager()
+            # Search both USER (profile) and SESSION level semantic memories
+            # USER level is required for profile memories (mem_user_xxx)
+            # SESSION level is included for compatibility
+            search_isolation_types = [
+                IsolationType.USER,
+                IsolationType.SESSION,
+            ]
+            logger.debug(
+                "query_search - Searching semantic memory with isolation types: %s, "
+                "user_profile_id: %s, session_id: %s",
+                [t.value for t in search_isolation_types],
+                session_data.user_profile_id,
+                session_data.session_id,
+            )
             semantic_task = asyncio.create_task(
                 semantic_session.search(
-                    memory_type=[IsolationType.SESSION],
+                    memory_type=search_isolation_types,
                     message=query,
                     session_data=session_data,
                     limit=limit,

@@ -6,8 +6,11 @@ These facts are typically listed at the beginning of a session for quick referen
 """
 
 from memmachine.semantic_memory.semantic_model import (
+    RawSemanticPrompt,
     SemanticCategory,
-    StructuredSemanticPrompt,
+)
+from memmachine.semantic_memory.util.semantic_prompt_template import (
+    build_update_prompt,
 )
 
 # Task-oriented structured facts tags
@@ -163,11 +166,121 @@ task_assistant_description = """
     state, it belongs in episodic memory, not semantic memory.
 """
 
+# Custom consolidation prompt for task-oriented structured facts
+task_assistant_consolidation_prompt = """
+    Your job is to perform memory consolidation for a task-oriented structured facts memory system.
+    Despite the name, consolidation is not solely about reducing the amount of memories, but rather, minimizing interference between structured facts while maintaining data integrity and usability.
+    By consolidating memories, we remove unnecessary couplings of information from context, spurious correlations inherited from the circumstances of their acquisition.
+
+    You will receive a set of task-oriented structured facts memories which are semantically similar (same tag and feature name).
+    Produce a new list of memories to keep.
+
+    A memory is a json object with 4 fields:
+    - tag: broad category of memory (basics, contacts, identities, accounts, preferences, relationships, services)
+    - feature: feature name (e.g., "EMAIL", "PHONE NUMBER", "FULL NAME")
+    - value: detailed contents of the memory
+    - metadata: object with 1 field
+    -- id: integer
+
+    You will output consolidated memories, which are json objects with 4 fields:
+    - tag: string (must be one of: basics, contacts, identities, accounts, preferences, relationships, services)
+    - feature: string (must follow FEATURE NAMING RULES below)
+    - value: string (detailed contents)
+    - metadata: object with 1 field
+    -- citations: list of ids of old memories which influenced this one
+
+    You will also output a list of old memories to keep (memories are deleted by default).
+
+    CRITICAL TAG RULES:
+    - You MUST ONLY use the tags defined in the tags list: basics, contacts, identities, accounts, preferences, relationships, services
+    - DO NOT create new tags - if information doesn't fit perfectly, choose the closest matching tag
+    - Financial-related information should use "accounts" (for account details) or "preferences" (for financial preferences)
+
+    FEATURE NAMING RULES (MUST FOLLOW):
+    - Use UPPERCASE letters with SPACES between words (e.g., "PHONE NUMBER", "EMAIL")
+    - Use full words, not abbreviations
+    - Be specific and descriptive
+
+    Standard Feature Names (User's Own Information):
+    - "FULL NAME" (not "NAME", "USER NAME", "USERNAME")
+    - "EMAIL" or "EMAIL WORK", "EMAIL PERSONAL" (for multiple emails)
+    - "PHONE NUMBER" or "PHONE NUMBER WORK", "PHONE NUMBER PERSONAL" (for multiple phones)
+    - "BANK ACCOUNT LAST4" or "BANK ACCOUNT LAST4 CHECKING", "BANK ACCOUNT LAST4 SAVINGS" (for multiple accounts)
+    - "CREDIT CARD LAST4" or "CREDIT CARD LAST4 VISA", "CREDIT CARD LAST4 AMEX" (for multiple cards)
+
+    Feature Names with Ownership (Information Belonging to Others):
+    - Priority Rule: ALWAYS use the person's name if available (e.g., "ALICE PHONE NUMBER") instead of relationship type (e.g., "FRIEND PHONE NUMBER")
+    - If name is unknown: Use relationship type as fallback (e.g., "SPOUSE EMAIL", "CHILD PHONE NUMBER")
+    - For service providers: Use provider's name if available (e.g., "DR SMITH PHONE") instead of service type (e.g., "DOCTOR PHONE")
+
+    CONSOLIDATION GUIDELINES:
+
+    1. **Identical Information (Same Value & Meaning)**: 
+       - If memories have identical values and meanings, DELETE duplicates and KEEP only one
+       - Example: Multiple "EMAIL" features with value "user@example.com" → Keep one, delete others
+
+    2. **Different Information (Different Value or Distinct Account)**:
+       - If memories have different values for the same feature name, they represent different accounts
+       - UPDATE feature names to use appropriate suffixes (e.g., "EMAIL WORK", "EMAIL PERSONAL")
+       - Example: "EMAIL": "user@example.com" and "EMAIL": "work@example.com" → 
+         * Keep "EMAIL PERSONAL": "user@example.com"
+         * Keep "EMAIL WORK": "work@example.com"
+         * Delete original "EMAIL" entries
+
+    3. **Ownership Consolidation**:
+       - If memories have the same information but different ownership representations:
+         * Prefer name-based features over relationship-based features
+         * Example: "FRIEND PHONE NUMBER": "123-456-7890" and "ALICE PHONE NUMBER": "123-456-7890" → 
+           Keep "ALICE PHONE NUMBER", delete "FRIEND PHONE NUMBER"
+
+    4. **Redundant Information**:
+       - Memories containing only redundant information should be deleted entirely
+       - If information has been processed into a more complete memory, delete the incomplete versions
+
+    5. **Feature Name Synchronization**:
+       - If memories are sufficiently similar but differ in key details, synchronize their feature names
+       - Use consistent naming across similar memories
+       - Keep only the key details (highest-entropy) in the feature name. The nuances go in the value field
+
+    6. **Multiple Accounts Handling**:
+       - If enough memories share similar features but represent different accounts, use suffixes to distinguish them
+       - Don't create suffixes too early. Have at least two distinct accounts first
+       - Use consistent suffix naming (e.g., "EMAIL WORK", "EMAIL PERSONAL", not "EMAIL OFFICE", "EMAIL HOME")
+
+    Overall memory life-cycle:
+    raw structured facts -> extracted features -> features sorted by tag -> consolidated structured profiles
+
+    The more memories you receive, the more interference there is in the memory system.
+    This causes cognitive load. Cognitive load is bad.
+    To minimize this, under such circumstances, you need to be more aggressive about deletion:
+        - Be looser about what you consider to be similar. Some distinctions are not worth the energy to maintain.
+        - Massage out the parts to keep and ruthlessly throw away the rest
+        - There is no free lunch here! At least some information must be deleted!
+
+    Do not create new tag names. Only use: basics, contacts, identities, accounts, preferences, relationships, services.
+
+    The proper noop syntax is:
+    {
+        "consolidate_memories": [],
+        "keep_memories": []
+    }
+
+    The final output schema is:
+    <think> insert your chain of thought here. </think>
+    {
+        "consolidate_memories": list of new memories to add,
+        "keep_memories": list of ids of old memories to keep
+    }
+"""
+
 TaskAssistantSemanticCategory = SemanticCategory(
     name="profile",
-    prompt=StructuredSemanticPrompt(
-        tags=task_assistant_tags,
-        description=task_assistant_description,
+    prompt=RawSemanticPrompt(
+        update_prompt=build_update_prompt(
+            tags=task_assistant_tags,
+            description=task_assistant_description,
+        ),
+        consolidation_prompt=task_assistant_consolidation_prompt,
     ),
 )
 

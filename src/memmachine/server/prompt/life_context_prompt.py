@@ -43,7 +43,7 @@ life_context_description = """
     Important Context:
     - Episodic memories already contain refined descriptions and atomic claims, including all historical events and temporary states
     - Semantic memory is for STABLE, REUSABLE user information that persists across sessions
-    - You will receive an OLD_PROFILE containing existing features - ALWAYS check this first before creating new features
+    - ALWAYS compare with existing features before creating new ones
     
     CRITICAL TAG RULES:
     - You MUST ONLY use the tags defined in the tags list below
@@ -135,37 +135,44 @@ life_context_description = """
     
     General Rules:
     - Avoid generic names like "INFO", "DATA", "DETAIL" - be specific about the characteristic
-    - If you see a feature name in OLD_PROFILE that means the same thing, USE THAT EXACT NAME - do not create a synonym
+    - If an existing feature name means the same thing, USE THAT EXACT NAME - do not create a synonym
     
-    AVOIDING DUPLICATES
+    HANDLING DUPLICATES AND UPDATES
     
-    Before Adding a New Feature:
-    1. ALWAYS check OLD_PROFILE for existing features with the same or similar meaning
-    2. If a similar feature exists, USE the existing feature name exactly as it appears
-    3. Do NOT create a new feature with a different name for the same information
+    Before Adding or Updating a Feature:
+    1. ALWAYS compare with existing features to check for duplicates or updates
+    2. Analyze the claims (content) to determine if it's the same information or different
     
-    Updating Existing Features:
-    - Use UPDATE commands (delete old + add new) to modify existing features
-    - Do NOT use ADD commands to create duplicates
-    - Example: If OLD_PROFILE has "PRIMARY INTEREST" and new message mentions "main hobby", 
-      UPDATE "PRIMARY INTEREST" instead of creating "MAIN HOBBY"
+    Decision Rules Based on Claims:
+    - If the claim represents the SAME information (same value, same meaning): OVERWRITE the existing feature using UPDATE command
+      * Example: Existing "PRIMARY INTEREST" with value "photography", new claim mentions "main hobby is photography" → UPDATE "PRIMARY INTEREST"
+    - If the claim represents DIFFERENT information (different value, different aspect): Create a new feature with a different suffix or name
+      * Example: Existing "CAREER GOAL" with value "become a manager", new claim mentions "also wants to start a side business" → Keep "CAREER GOAL" and ADD "SIDE BUSINESS GOAL" or "ENTREPRENEURIAL GOAL"
+    
+    Handling Multiple Aspects of the Same Type:
+    - If existing features already have specific names (e.g., "CAREER GOAL"), and new information is about a different aspect, create a new feature with a different name (e.g., "PERSONAL DEVELOPMENT GOAL", "HEALTH GOAL")
+    - If existing feature has a generic name (e.g., "GOAL") and new information is about a different aspect:
+      * Determine which aspect based on claims (e.g., "career goal" vs "health goal")
+      * UPDATE the existing one to be more specific (e.g., "CAREER GOAL")
+      * ADD the new one with appropriate name (e.g., "HEALTH GOAL")
     
     Reusing Feature Names:
-    - If you see a feature name in OLD_PROFILE that means the same thing, USE THAT EXACT NAME
+    - If an existing feature name means the same thing, USE THAT EXACT NAME
     - Do not create synonyms or variations
-    - Check OLD_PROFILE first - reuse existing feature names when the information matches
+    - Compare with existing features first - reuse existing feature names when the information matches
     
     EXTRACTION PROCESS
     
     Step-by-Step Process:
-    1. Check OLD_PROFILE for existing features
-    2. Identify what personal insights are new or need updating
+    1. Compare with existing features to identify duplicates or updates
+    2. Analyze claims (content) to determine if information is the same or different
     3. **CRITICAL: Select the correct tag from the defined list (interests, lifestyle, goals, personality, life_situation) - DO NOT create new tags**
     4. Use standard feature names (see FEATURE NAMING RULES above)
-    5. Extract INSIGHTS and UNDERSTANDING, not just facts
-    6. Extract patterns and recurring themes that reveal life context
-    7. Look for underlying motivations, values, and personality traits
-    8. Include information that helps the agent understand the user deeply
+    5. **CRITICAL: For duplicate feature names, decide based on claims: if same information → OVERWRITE (UPDATE), if different information → create new with different name or suffix**
+    6. Extract INSIGHTS and UNDERSTANDING, not just facts
+    7. Extract patterns and recurring themes that reveal life context
+    8. Look for underlying motivations, values, and personality traits
+    9. Include information that helps the agent understand the user deeply
     
     Priority Order:
     1. Personal characteristics that affect life guidance (personality, life_situation) - most important for advice

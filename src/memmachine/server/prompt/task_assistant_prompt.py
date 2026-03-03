@@ -24,8 +24,8 @@ task_assistant_tags: dict[str, str] = {
     "preferences": "User preferences: preferred contact methods (phone, email, text), communication style preferences, service preferences (appointment times, service providers), payment methods, dietary preferences, accessibility needs, language preferences, notification preferences, time zone, preferred meeting formats.",
     
     # === Relationships & Network ===
-    "relationships": "Personal relationships and family contacts: family members (spouse, children, parents, siblings), close friends, business contacts, authorized representatives, people the user frequently interacts with or makes decisions on behalf of. Include relationship context (e.g., 'my wife Sarah', 'my son John') and relevant contact information or identifiers. IMPORTANT: When storing contact information, ALWAYS use the person's name if available (e.g., 'SARAH EMAIL', 'ALICE PHONE NUMBER', 'JOHN PHONE NUMBER'). Only use relationship type (e.g., 'SPOUSE EMAIL', 'FRIEND PHONE NUMBER') if the name is unknown.",
-    "services": "Service providers and professional contacts: doctor, lawyer, accountant, dentist, insurance agent, financial advisor, therapist, personal trainer, and other professional service providers. Include contact information, specialties, and relevant details for these service providers. IMPORTANT: ALWAYS use the provider's name if available (e.g., 'DR SMITH PHONE', 'JOHN LAWYER EMAIL'). Only use service type (e.g., 'DOCTOR PHONE', 'LAWYER EMAIL') if the name is unknown.",
+    "relationships": "Personal relationships and family contacts: family members (spouse, children, parents, siblings), close friends, business contacts, authorized representatives, people the user frequently interacts with or makes decisions on behalf of. Include relationship context and relevant contact information or identifiers. IMPORTANT: When storing contact information, ALWAYS use the person's name if available (e.g., 'SARAH EMAIL', 'ALICE PHONE NUMBER'). Only use relationship type (e.g., 'SPOUSE EMAIL', 'FRIEND PHONE NUMBER') if the name is unknown.",
+    "services": "Service providers and professional contacts: doctor, lawyer, accountant, dentist, insurance agent, financial advisor, therapist, personal trainer, and other professional service providers. Include contact information, specialties, and relevant details. IMPORTANT: ALWAYS use the provider's name if available (e.g., 'DR SMITH PHONE', 'JOHN LAWYER EMAIL'). Only use service type (e.g., 'DOCTOR PHONE', 'LAWYER EMAIL') if the name is unknown.",
 }
 
 # Optimized description for task-oriented structured facts
@@ -43,12 +43,11 @@ task_assistant_description = """
     Important Context:
     - Episodic memories already contain refined descriptions and atomic claims, including all historical events and temporary states
     - Semantic memory is for STABLE, REUSABLE user information that persists across sessions
-    - You will receive an OLD_PROFILE containing existing features - ALWAYS check this first before creating new features
+    - ALWAYS compare with existing features before creating new ones
     
     CRITICAL TAG RULES:
-    - You MUST ONLY use the tags defined in the tags list below
-    - DO NOT create new tags - use one of the existing tags: basics, contacts, identities, accounts, preferences, relationships, services
-    - If information doesn't fit perfectly, choose the closest matching tag (e.g., financial issues → "accounts" or "preferences")
+    - You MUST ONLY use the tags defined in the tags list: basics, contacts, identities, accounts, preferences, relationships, services
+    - DO NOT create new tags - if information doesn't fit perfectly, choose the closest matching tag
     - Financial-related information should use "accounts" (for account details) or "preferences" (for financial preferences)
     
     WHAT TO EXTRACT
@@ -78,19 +77,22 @@ task_assistant_description = """
     Standard Feature Names (User's Own Information):
     - "FULL NAME" (not "NAME", "USER NAME", "USERNAME")
     - "EMAIL" (not "EMAIL ADDRESS", "CONTACT EMAIL", "E-MAIL")
-      * If multiple emails exist, use suffix: "EMAIL WORK", "EMAIL PERSONAL", "EMAIL WORKING", "EMAIL PRIVATE"
     - "PHONE NUMBER" (not "PHONE", "MOBILE", "TELEPHONE")
-      * If multiple phones exist, use suffix: "PHONE NUMBER WORK", "PHONE NUMBER PERSONAL", "MOBILE PHONE", "HOME PHONE"
-    - "MOBILE PHONE" (only if user has multiple phones and you need to distinguish)
     - "BANK ACCOUNT LAST4" (not "ACCOUNT", "BANK", "ACCOUNT NUMBER")
-      * If multiple accounts exist, use suffix: "BANK ACCOUNT LAST4 CHECKING", "BANK ACCOUNT LAST4 SAVINGS"
     - "CREDIT CARD LAST4" (not "CARD", "CARD NUMBER")
-      * If multiple cards exist, use suffix: "CREDIT CARD LAST4 VISA", "CREDIT CARD LAST4 AMEX"
     - "PREFERRED PAYMENT METHOD" (not "PAYMENT", "PREFERENCE")
     - "TIMEZONE" (not "TZ", "TIME ZONE")
     - "DATE OF BIRTH" (not "DOB", "BIRTHDATE", "BIRTH DATE")
     - "HOME ADDRESS" (not "ADDRESS", "HOME", "RESIDENCE")
-      * If multiple addresses exist, use suffix: "HOME ADDRESS", "WORK ADDRESS", "MAILING ADDRESS"
+    
+    Multiple Accounts of the Same Type:
+    - If the user has multiple accounts of the same type, use SUFFIXES to distinguish them
+    - Examples:
+      * Multiple emails: "EMAIL WORK", "EMAIL PERSONAL" (or "EMAIL WORKING", "EMAIL PRIVATE")
+      * Multiple phones: "PHONE NUMBER WORK", "PHONE NUMBER PERSONAL", "MOBILE PHONE", "HOME PHONE"
+      * Multiple bank accounts: "BANK ACCOUNT LAST4 CHECKING", "BANK ACCOUNT LAST4 SAVINGS"
+      * Multiple credit cards: "CREDIT CARD LAST4 VISA", "CREDIT CARD LAST4 AMEX"
+      * Multiple addresses: "HOME ADDRESS", "WORK ADDRESS", "MAILING ADDRESS"
     
     Feature Names with Ownership (Information Belonging to Others):
     Format: "[OWNER] [INFORMATION TYPE]"
@@ -99,75 +101,52 @@ task_assistant_description = """
     - If name is known: Use "[NAME] [INFORMATION TYPE]" (e.g., "ALICE PHONE NUMBER", "SARAH EMAIL")
     - If name is unknown: Use relationship type as fallback (e.g., "FRIEND PHONE NUMBER", "COLLEAGUE EMAIL")
     
-    Family Members:
-    - Spouse: "SARAH EMAIL", "SARAH PHONE NUMBER" (if name known) OR "SPOUSE EMAIL", "SPOUSE PHONE NUMBER" (if name unknown)
-    - Children: "JOHN PHONE NUMBER", "JOHN EMAIL" (if name known) OR "CHILD PHONE NUMBER", "CHILD EMAIL" (if name unknown)
-      * Multiple children: "JOHN PHONE NUMBER", "MARY PHONE NUMBER" (if names known) OR "CHILD 1 PHONE NUMBER", "CHILD 2 PHONE NUMBER" (if names unknown)
-    - Parents: "MOTHER SARAH PHONE" (if name known) OR "MOTHER PHONE NUMBER" (if name unknown)
-    - Siblings: "ALICE PHONE NUMBER" (if name known) OR "SIBLING PHONE NUMBER" (if name unknown)
-    - Emergency contacts: "ALICE PHONE NUMBER" (if name known) OR "EMERGENCY CONTACT PHONE NUMBER" (if name unknown)
+    Examples by Category:
+    - Family: "SARAH EMAIL" (spouse, name known) OR "SPOUSE EMAIL" (name unknown)
+    - Children: "JOHN PHONE NUMBER" (name known) OR "CHILD PHONE NUMBER" (name unknown)
+      * Multiple children: "JOHN PHONE NUMBER", "MARY PHONE NUMBER" (names known) OR "CHILD 1 PHONE NUMBER", "CHILD 2 PHONE NUMBER" (names unknown)
+    - Parents: "MOTHER SARAH PHONE" (name known) OR "MOTHER PHONE NUMBER" (name unknown)
+    - Siblings: "ALICE PHONE NUMBER" (name known) OR "SIBLING PHONE NUMBER" (name unknown)
+    - Emergency contacts: "ALICE PHONE NUMBER" (name known) OR "EMERGENCY CONTACT PHONE NUMBER" (name unknown)
+    - Friends: "ALICE PHONE NUMBER" (name known) OR "FRIEND PHONE NUMBER" (name unknown)
+    - Service providers: "DR SMITH PHONE" (name known) OR "DOCTOR PHONE" (name unknown)
+    - Work contacts: "JOHN MANAGER EMAIL" (name known) OR "MANAGER EMAIL" (name unknown)
     
-    Service Providers:
-    - "DR SMITH PHONE", "DR SMITH EMAIL" (if name known) OR "DOCTOR PHONE", "DOCTOR EMAIL" (if name unknown)
-    - "JOHN LAWYER CONTACT" (if name known) OR "LAWYER CONTACT" (if name unknown)
-    - "ACCOUNTANT MARY EMAIL" (if name known) OR "ACCOUNTANT EMAIL" (if name unknown)
+    HANDLING DUPLICATES AND UPDATES
     
-    Work Contacts:
-    - "JOHN MANAGER EMAIL" (if name known) OR "MANAGER EMAIL" (if name unknown)
-    - "ALICE COLLEAGUE PHONE" (if name known) OR "COLLEAGUE PHONE" (if name unknown)
+    Before Adding or Updating a Feature:
+    1. ALWAYS compare with existing features to check for duplicates or updates
+    2. Analyze the claims (content) to determine if it's the same information or different
     
-    Friends and Other Contacts:
-    - "ALICE PHONE NUMBER" (if name known) OR "FRIEND PHONE NUMBER" (if name unknown)
-    - "BOB EMAIL" (if name known) OR "FRIEND EMAIL" (if name unknown)
-    
-    Ownership Examples:
-    - User's own email → "EMAIL"
-    - Spouse Sarah's email → "SARAH EMAIL" (preferred) OR "SPOUSE EMAIL" (if name unknown)
-    - Friend Alice's phone → "ALICE PHONE NUMBER" (preferred) OR "FRIEND PHONE NUMBER" (if name unknown)
-    - Child John's phone → "JOHN PHONE NUMBER" (preferred) OR "CHILD PHONE NUMBER" (if name unknown)
-    - Doctor Smith's contact → "DR SMITH PHONE" (preferred) OR "DOCTOR PHONE" (if name unknown)
-    
-    AVOIDING DUPLICATES
-    
-    Before Adding a New Feature:
-    1. ALWAYS check OLD_PROFILE for existing features with the same or similar meaning
-    2. If a similar feature exists, USE the existing feature name exactly as it appears
-    3. Do NOT create a new feature with a different name for the same information
+    Decision Rules Based on Claims:
+    - If the claim represents the SAME information (same value, same meaning): OVERWRITE the existing feature using UPDATE command
+      * Example: Existing "EMAIL" with value "user@example.com", new claim mentions "email address user@example.com" → UPDATE "EMAIL"
+    - If the claim represents DIFFERENT information (different value, different account): Create a new feature with a different suffix
+      * Example: Existing "EMAIL" with value "user@example.com", new claim mentions "work email user@work.com" → UPDATE "EMAIL" to "EMAIL PERSONAL" and ADD "EMAIL WORK" with value "user@work.com"
     
     Handling Multiple Accounts of the Same Type:
-    - If the user has multiple accounts of the same type (e.g., multiple emails, multiple phone numbers, multiple bank accounts), use SUFFIXES to distinguish them
-    - Examples:
-      * Multiple emails: "EMAIL WORK" and "EMAIL PERSONAL" (or "EMAIL WORKING" and "EMAIL PRIVATE")
-      * Multiple phones: "PHONE NUMBER WORK" and "PHONE NUMBER PERSONAL"
-      * Multiple bank accounts: "BANK ACCOUNT LAST4 CHECKING" and "BANK ACCOUNT LAST4 SAVINGS"
-      * Multiple addresses: "HOME ADDRESS" and "WORK ADDRESS"
-    - If OLD_PROFILE already has a feature with a suffix (e.g., "EMAIL WORK"), and new information is about a different account of the same type, create a new feature with a different suffix (e.g., "EMAIL PERSONAL")
-    - If OLD_PROFILE has "EMAIL" (no suffix) and new information is about a different email, UPDATE "EMAIL" to "EMAIL WORK" and create "EMAIL PERSONAL" for the new one
-    
-    Updating Existing Features:
-    - Use UPDATE commands (delete old + add new) to modify existing features
-    - Do NOT use ADD commands to create duplicates
-    - Example: If OLD_PROFILE has "EMAIL" and new message mentions "email address", 
-      UPDATE "EMAIL" instead of creating "EMAIL ADDRESS"
-    - Example: If OLD_PROFILE has "EMAIL" and new message mentions a work email, 
-      UPDATE "EMAIL" to "EMAIL PERSONAL" and ADD "EMAIL WORK" for the work email
+    - If existing features already have suffixes (e.g., "EMAIL WORK"), and new information is about a different account, create a new feature with a different suffix (e.g., "EMAIL PERSONAL")
+    - If existing feature has no suffix (e.g., "EMAIL") and new information is about a different account of the same type:
+      * Determine which is which based on claims (e.g., "work email" vs "personal email")
+      * UPDATE the existing one to add appropriate suffix (e.g., "EMAIL PERSONAL")
+      * ADD the new one with different suffix (e.g., "EMAIL WORK")
     
     Reusing Feature Names:
-    - If you see a feature name in OLD_PROFILE that means the same thing, USE THAT EXACT NAME
+    - If an existing feature name means the same thing, USE THAT EXACT NAME
     - Do not create synonyms or variations
-    - Check OLD_PROFILE first - reuse existing feature names when the information matches
+    - Compare with existing features first - reuse existing feature names when the information matches
     - For multiple accounts: Check if a suffix already exists, and use consistent suffix naming
     
     EXTRACTION PROCESS
     
     Step-by-Step Process:
-    1. Check OLD_PROFILE for existing features
-    2. Identify what information is new or needs updating
+    1. Compare with existing features to identify duplicates or updates
+    2. Analyze claims (content) to determine if information is the same or different
     3. **CRITICAL: Select the correct tag from the defined list (basics, contacts, identities, accounts, preferences, relationships, services) - DO NOT create new tags**
     4. Use standard feature names (see FEATURE NAMING RULES above)
     5. Include ownership prefix if information belongs to someone else
     6. **CRITICAL: For ownership, ALWAYS use the person's name if available (e.g., "ALICE PHONE NUMBER") instead of relationship type (e.g., "FRIEND PHONE NUMBER"). Only use relationship type if the name is unknown.**
-    7. **CRITICAL: For multiple accounts of the same type (e.g., multiple emails, phones, bank accounts), use SUFFIXES to distinguish them (e.g., "EMAIL WORK" vs "EMAIL PERSONAL", "PHONE NUMBER WORK" vs "PHONE NUMBER PERSONAL"). If OLD_PROFILE has "EMAIL" and you discover a work email, update to "EMAIL PERSONAL" and add "EMAIL WORK".**
+    7. **CRITICAL: For duplicate feature names, decide based on claims: if same information → OVERWRITE (UPDATE), if different information → create new with suffix (e.g., "EMAIL WORK" vs "EMAIL PERSONAL")**
     8. Extract ALL structured facts, even basic ones like names and contact details
     9. For account numbers and IDs, store only the last 4 digits
     10. Include relationship context when extracting family/contact information

@@ -29,6 +29,9 @@ task_assistant_tags: dict[str, str] = {
     # === Relationships & Network ===
     "relationships": "Personal relationships and family contacts: family members (spouse, children, parents, siblings), close friends, business contacts, authorized representatives, people the user frequently interacts with or makes decisions on behalf of. Include relationship context and relevant contact information or identifiers. IMPORTANT: When storing contact information, ALWAYS use the person's name if available (e.g., 'SARAH EMAIL', 'ALICE PHONE NUMBER'). Only use relationship type (e.g., 'SPOUSE EMAIL', 'FRIEND PHONE NUMBER') if the name is unknown.",
     "services": "Service providers and professional contacts: doctor, lawyer, accountant, dentist, insurance agent, financial advisor, therapist, personal trainer, and other professional service providers. Include contact information, specialties, and relevant details. IMPORTANT: ALWAYS use the provider's name if available (e.g., 'DR SMITH PHONE', 'JOHN LAWYER EMAIL'). Only use service type (e.g., 'DOCTOR PHONE', 'LAWYER EMAIL') if the name is unknown.",
+    
+    # === Other Information ===
+    "others": "Other structured facts that don't fit into the above categories but are still stable, reusable information needed for task completion. Use this tag only when the information clearly doesn't belong to any of the other defined tags (basics, contacts, identities, accounts, preferences, relationships, services).",
 }
 
 # Optimized description for task-oriented structured facts
@@ -49,9 +52,10 @@ task_assistant_description = """
     - ALWAYS compare with existing features before creating new ones
     
     CRITICAL TAG RULES:
-    - You MUST ONLY use the tags defined in the tags list: basics, contacts, identities, accounts, preferences, relationships, services
+    - You MUST ONLY use the tags defined in the tags list: basics, contacts, identities, accounts, preferences, relationships, services, others
     - DO NOT create new tags - if information doesn't fit perfectly, choose the closest matching tag
     - Financial-related information should use "accounts" (for account details) or "preferences" (for financial preferences)
+    - Use "others" tag only when the information clearly doesn't belong to any of the other defined tags
     
     WHAT TO EXTRACT
     
@@ -145,7 +149,7 @@ task_assistant_description = """
     Step-by-Step Process:
     1. Compare with existing features to identify duplicates or updates
     2. Analyze claims (content) to determine if information is the same or different
-    3. **CRITICAL: Select the correct tag from the defined list (basics, contacts, identities, accounts, preferences, relationships, services) - DO NOT create new tags**
+    3. **CRITICAL: Select the correct tag from the defined list (basics, contacts, identities, accounts, preferences, relationships, services, others) - DO NOT create new tags**
     4. Use standard feature names (see FEATURE NAMING RULES above)
     5. Include ownership prefix if information belongs to someone else
     6. **CRITICAL: For ownership, ALWAYS use the person's name if available (e.g., "ALICE PHONE NUMBER") instead of relationship type (e.g., "FRIEND PHONE NUMBER"). Only use relationship type if the name is unknown.**
@@ -176,14 +180,14 @@ task_assistant_consolidation_prompt = """
     Produce a new list of memories to keep.
 
     A memory is a json object with 4 fields:
-    - tag: broad category of memory (basics, contacts, identities, accounts, preferences, relationships, services)
+    - tag: broad category of memory (basics, contacts, identities, accounts, preferences, relationships, services, others)
     - feature: feature name (e.g., "EMAIL", "PHONE NUMBER", "FULL NAME")
     - value: detailed contents of the memory
     - metadata: object with 1 field
     -- id: integer
 
     You will output consolidated memories, which are json objects with 4 fields:
-    - tag: string (must be one of: basics, contacts, identities, accounts, preferences, relationships, services)
+    - tag: string (must be one of: basics, contacts, identities, accounts, preferences, relationships, services, others)
     - feature: string (must follow FEATURE NAMING RULES below)
     - value: string (detailed contents)
     - metadata: object with 1 field
@@ -192,9 +196,10 @@ task_assistant_consolidation_prompt = """
     You will also output a list of old memories to keep (memories are deleted by default).
 
     CRITICAL TAG RULES:
-    - You MUST ONLY use the tags defined in the tags list: basics, contacts, identities, accounts, preferences, relationships, services
+    - You MUST ONLY use the tags defined in the tags list: basics, contacts, identities, accounts, preferences, relationships, services, others
     - DO NOT create new tags - if information doesn't fit perfectly, choose the closest matching tag
     - Financial-related information should use "accounts" (for account details) or "preferences" (for financial preferences)
+    - Use "others" tag only when the information clearly doesn't belong to any of the other defined tags
 
     FEATURE NAMING RULES (MUST FOLLOW):
     - Use UPPERCASE letters with SPACES between words (e.g., "PHONE NUMBER", "EMAIL")
@@ -257,7 +262,7 @@ task_assistant_consolidation_prompt = """
         - Massage out the parts to keep and ruthlessly throw away the rest
         - There is no free lunch here! At least some information must be deleted!
 
-    Do not create new tag names. Only use: basics, contacts, identities, accounts, preferences, relationships, services.
+    Do not create new tag names. Only use: basics, contacts, identities, accounts, preferences, relationships, services, others.
 
     The proper noop syntax is:
     {

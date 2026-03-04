@@ -82,6 +82,8 @@ class IngestionService:
         logger.info("Processing semantic ingestion for set_id: %s", set_id)
         resources = self._resource_retriever.get_resources(set_id)
 
+        # Atomically claim messages - this prevents multiple pods from processing the same messages
+        # Messages are automatically marked as ingested when claimed
         history_ids = await self._semantic_storage.get_history_messages(
             set_ids=[set_id],
             limit=50,
@@ -102,22 +104,18 @@ class IngestionService:
             if isolation_type in ["session", "role"]:
                 logger.debug(
                     "No semantic categories configured for %s set_id %s (expected when only profile memory is enabled). "
-                    "Messages will be marked as ingested.",
+                    "Messages are already marked as ingested.",
                     isolation_type,
                     set_id,
                 )
             else:
                 logger.warning(
                     "No semantic categories configured for set %s (type: %s), skipping ingestion. "
-                    "Messages will be marked as ingested.",
+                    "Messages are already marked as ingested.",
                     set_id,
                     isolation_type,
                 )
-
-            await self._semantic_storage.mark_messages_ingested(
-                set_id=set_id,
-                history_ids=history_ids,
-            )
+            # Messages are already marked as ingested by get_history_messages()
             return
 
         if len(history_ids) == 0:
@@ -233,17 +231,12 @@ class IngestionService:
                 "This may indicate LLM processing errors.",
                 set_id,
             )
+            # Note: Messages are already marked as ingested when claimed via get_history_messages()
+            # Even if processing failed, we don't want to retry them to avoid infinite loops
             return
 
-        logger.info(
-            "Marking %d messages as ingested for set_id %s",
-            len(mark_messages),
-            set_id,
-        )
-        await self._semantic_storage.mark_messages_ingested(
-            set_id=set_id,
-            history_ids=mark_messages,
-        )
+        # Note: Messages are already marked as ingested atomically when claimed
+        # via get_history_messages(). No need to mark them again here.
 
         logger.debug("Starting consolidation for set_id %s", set_id)
         await self._consolidate_set_memories_if_applicable(

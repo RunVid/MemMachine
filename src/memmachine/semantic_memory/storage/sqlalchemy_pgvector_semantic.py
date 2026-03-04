@@ -419,8 +419,18 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         limit: int | None = None,
         is_ingested: bool | None = None,
     ) -> list[EpisodeIdT]:
-        stmt = select(SetIngestedHistory.history_id).order_by(
-            SetIngestedHistory.history_id.asc(),
+        """
+        Get history messages, atomically claiming them to prevent duplicate processing.
+        
+        Uses SELECT FOR UPDATE SKIP LOCKED to ensure only one pod can claim a message.
+        Messages are immediately marked as ingested in the same transaction.
+        """
+        # Use SELECT FOR UPDATE SKIP LOCKED to atomically claim messages
+        # This ensures only one pod can process a message at a time
+        stmt = (
+            select(SetIngestedHistory)
+            .order_by(SetIngestedHistory.history_id.asc())
+            .with_for_update(skip_locked=True)
         )
 
         stmt = self._apply_history_filter(
@@ -431,8 +441,49 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         )
 
         async with self._create_session() as session:
+            # Claim messages by locking them
             result = await session.execute(stmt)
-            history_ids = result.scalars().all()
+            history_records = result.scalars().all()
+            
+            if not history_records:
+                await session.commit()
+                return []
+            
+            # Immediately mark as ingested in the same transaction
+            # This ensures other pods cannot claim these messages
+            history_ids = [r.history_id for r in history_records]
+            
+            # Optimize: If all records have the same set_id (common case), use single UPDATE
+            # Otherwise, group by set_id for correctness
+            unique_set_ids = {r.set_id for r in history_records}
+            if len(unique_set_ids) == 1:
+                # Common case: all messages from same set_id - single UPDATE
+                set_id = history_records[0].set_id
+                update_stmt = (
+                    update(SetIngestedHistory)
+                    .where(SetIngestedHistory.set_id == set_id)
+                    .where(SetIngestedHistory.history_id.in_(history_ids))
+                    .values(ingested=True)
+                )
+                await session.execute(update_stmt)
+            else:
+                # Multiple set_ids - group and update separately
+                history_ids_by_set: dict[str, list[str]] = {}
+                for record in history_records:
+                    if record.set_id not in history_ids_by_set:
+                        history_ids_by_set[record.set_id] = []
+                    history_ids_by_set[record.set_id].append(record.history_id)
+                
+                for set_id, ids in history_ids_by_set.items():
+                    update_stmt = (
+                        update(SetIngestedHistory)
+                        .where(SetIngestedHistory.set_id == set_id)
+                        .where(SetIngestedHistory.history_id.in_(ids))
+                        .values(ingested=True)
+                    )
+                    await session.execute(update_stmt)
+            
+            await session.commit()
 
         return TypeAdapter(list[EpisodeIdT]).validate_python(history_ids)
 

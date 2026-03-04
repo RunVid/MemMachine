@@ -491,6 +491,13 @@ class Neo4jSemanticStorage(SemanticStorage):
         limit: int | None = None,
         is_ingested: bool | None = None,
     ) -> list[EpisodeIdT]:
+        """
+        Get history messages, atomically claiming them to prevent duplicate processing.
+        
+        In Neo4j, we immediately mark messages as ingested in the same query to prevent
+        other pods from processing them. Neo4j doesn't have SELECT FOR UPDATE SKIP LOCKED,
+        but we achieve similar behavior by marking messages as ingested atomically.
+        """
         query = ["MATCH (h:SetHistory)"]
         conditions = []
         params: dict[str, Any] = {}
@@ -502,10 +509,15 @@ class Neo4jSemanticStorage(SemanticStorage):
             params["is_ingested"] = is_ingested
         if conditions:
             query.append("WHERE " + " AND ".join(conditions))
+        
+        # Immediately mark as ingested to prevent other pods from claiming them
+        # This achieves atomic claiming similar to SELECT FOR UPDATE SKIP LOCKED
+        query.append("SET h.is_ingested = true")
         query.append("RETURN h.history_id AS history_id ORDER BY h.history_id")
         if limit is not None:
             query.append("LIMIT $limit")
             params["limit"] = limit
+        
         records, _, _ = await self._driver.execute_query("\n".join(query), **params)
         return [EpisodeIdT(record["history_id"]) for record in records]
 

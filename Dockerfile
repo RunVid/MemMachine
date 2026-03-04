@@ -1,15 +1,16 @@
 #
 # Stage 1: Builder
 #
-FROM python:3.12-slim-trixie AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 # Update OS and Python/PIP Packages
-# Install curl (with retry, fix-broken, and fix-missing to handle network issues)
-RUN apt-get update && \
+# Install curl (with retry and fix-missing to handle network issues like 502 Bad Gateway)
+RUN for i in 1 2 3; do \
+    apt-get update && \
     apt-get upgrade -y && \
-    (apt-get install -y --fix-broken --fix-missing curl || \
-    (sleep 3 && apt-get update && apt-get install -y --fix-broken --fix-missing curl || \
-    (sleep 5 && apt-get update && apt-get install -y --fix-broken --fix-missing curl))) && \
+    apt-get install -y --no-install-recommends --fix-missing curl ca-certificates && \
+    break || sleep $i; \
+    done && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -53,15 +54,16 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 #
 # Stage 2: Final
 #
-FROM python:3.12-slim-trixie AS final
+FROM python:3.12-slim-bookworm AS final
 
 # Update OS and Python/PIP Packages
-# Install curl (with retry, fix-broken, and fix-missing to handle network issues)
-RUN apt-get update && \
+# Install curl (with retry and fix-missing to handle network issues like 502 Bad Gateway)
+RUN for i in 1 2 3; do \
+    apt-get update && \
     apt-get upgrade -y && \
-    (apt-get install -y --fix-broken --fix-missing curl || \
-    (sleep 3 && apt-get update && apt-get install -y --fix-broken --fix-missing curl || \
-    (sleep 5 && apt-get update && apt-get install -y --fix-broken --fix-missing curl))) && \
+    apt-get install -y --no-install-recommends --fix-missing curl ca-certificates && \
+    break || sleep $i; \
+    done && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

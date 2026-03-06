@@ -108,37 +108,60 @@ life_context_description = """
     Standard Feature Names:
     
     Interests:
-    - "PRIMARY INTEREST" (not "INTEREST", "LIKES")
-    - "PASSION" (not "HOBBY" if already using "PRIMARY INTEREST")
-    - "HOBBY" (for secondary interests)
+    - "PRIMARY INTEREST" (not "INTEREST", "LIKES", "HOBBY")
+    - "SECONDARY INTEREST" (for additional interests beyond primary)
+    - "PASSION" (for deep, meaningful interests)
+    - Multiple interests: If the user has multiple distinct interests, use descriptive suffixes
+      * Examples: "INTEREST PHOTOGRAPHY", "INTEREST COOKING", "INTEREST MUSIC"
+      * Or use numbered format: "INTEREST 1", "INTEREST 2" (less preferred)
     
     Lifestyle:
     - "WORK LIFE BALANCE STYLE" (not "BALANCE", "LIFESTYLE")
     - "EXERCISE HABIT" or "FITNESS ROUTINE" (not "EXERCISE", "ROUTINE")
     - "SLEEP PATTERN" (not "SLEEP", "PATTERN")
+    - "DIETARY HABIT" (not "DIET", "FOOD HABIT")
+    - "DAILY ROUTINE" (for general daily patterns)
+    - Multiple patterns: Use descriptive suffixes
+      * Examples: "ROUTINE MORNING", "ROUTINE EVENING", "ROUTINE WEEKEND"
     
     Goals:
-    - "CAREER GOAL" (not "GOAL", "ASPIRATION")
-    - "LONG TERM GOAL" (for general long-term goals)
-    - "HEALTH GOAL" (not "HEALTH")
-    - "FINANCIAL GOAL"
-    - "LIFE VISION"
+    - "CAREER GOAL" (not "GOAL", "ASPIRATION", "WORK GOAL")
+    - "HEALTH GOAL" (not "HEALTH", "FITNESS GOAL")
+    - "FINANCIAL GOAL" (not "MONEY GOAL", "FINANCE")
+    - "PERSONAL DEVELOPMENT GOAL" (for self-improvement goals)
+    - "RELATIONSHIP GOAL" (for social/family goals)
+    - "LIFE VISION" (for overarching life direction)
+    - "LONG TERM GOAL" (for general long-term goals that don't fit above)
+    - "SHORT TERM GOAL" (for near-term objectives)
+    - Multiple goals of the same type: Use descriptive suffixes
+      * Examples: "CAREER GOAL PRIMARY", "CAREER GOAL SECONDARY"
+      * Or: "HEALTH GOAL FITNESS", "HEALTH GOAL DIET"
     
     Personality:
-    - "COMMUNICATION STYLE" (not "STYLE", "PERSONALITY")
+    - "COMMUNICATION STYLE" (not "STYLE", "PERSONALITY", "HOW THEY TALK")
     - "DECISION MAKING STYLE" (not "DECISION", "APPROACH")
     - "STRESS MANAGEMENT APPROACH" (not "STRESS", "MANAGEMENT")
-    - "INTROVERSION LEVEL"
-    - "STRESS RESPONSE PATTERN"
-    - "PERSONALITY TYPE"
+    - "SOCIAL PREFERENCE" (introversion/extroversion, not "INTROVERSION LEVEL")
+    - "CONFLICT RESOLUTION STYLE" (not "CONFLICT", "ARGUMENT STYLE")
+    - "EMOTIONAL PATTERN" (not "EMOTIONS", "MOOD")
+    - "PERSONALITY TYPE" (for formal personality assessments like MBTI)
     
-    Life Context:
-    - "CURRENT LIFE STAGE" (not "STAGE", "SITUATION")
-    - "CORE VALUE" or "PRIORITY" (not "VALUE", "IMPORTANT")
+    Life Situation:
+    - "CURRENT LIFE STAGE" (not "STAGE", "SITUATION", "LIFE PHASE")
+    - "CORE VALUE" (not "VALUE", "IMPORTANT", "BELIEF")
+    - "PRIORITY" (for what matters most right now)
+    - "LIFE CHALLENGE" (for current difficulties)
+    - "LIFE OPPORTUNITY" (for current opportunities)
+    - "FAMILY SITUATION" (for family context)
+    - "WORK SITUATION" (for career/job context)
+    - Multiple values: Use descriptive suffixes
+      * Examples: "CORE VALUE FAMILY", "CORE VALUE CAREER", "CORE VALUE HEALTH"
     
     General Rules:
-    - Avoid generic names like "INFO", "DATA", "DETAIL" - be specific about the characteristic
+    - Avoid generic names like "INFO", "DATA", "DETAIL", "THING" - be specific about the characteristic
     - If an existing feature name means the same thing, USE THAT EXACT NAME - do not create a synonym
+    - Use consistent naming: don't mix "GOAL" and "ASPIRATION" for the same concept
+    - Prefer specific names over generic ones: "CAREER GOAL" is better than "GOAL"
     
     HANDLING DUPLICATES AND UPDATES
     
@@ -149,20 +172,29 @@ life_context_description = """
     Decision Rules Based on Claims:
     - If the claim represents the SAME information (same value, same meaning): OVERWRITE the existing feature using UPDATE command
       * Example: Existing "PRIMARY INTEREST" with value "photography", new claim mentions "main hobby is photography" → UPDATE "PRIMARY INTEREST"
+      * Example: Existing "CAREER GOAL" with value "become a manager", new claim mentions "wants to be promoted to manager" → UPDATE "CAREER GOAL" (same goal, different wording)
     - If the claim represents DIFFERENT information (different value, different aspect): Create a new feature with a different suffix or name
-      * Example: Existing "CAREER GOAL" with value "become a manager", new claim mentions "also wants to start a side business" → Keep "CAREER GOAL" and ADD "SIDE BUSINESS GOAL" or "ENTREPRENEURIAL GOAL"
+      * Example: Existing "CAREER GOAL" with value "become a manager", new claim mentions "also wants to start a side business" → Keep "CAREER GOAL" and ADD "CAREER GOAL ENTREPRENEURIAL" or "ENTREPRENEURIAL GOAL"
+      * Example: Existing "PRIMARY INTEREST" with value "photography", new claim mentions "also loves cooking" → Keep "PRIMARY INTEREST" and ADD "INTEREST COOKING" or "SECONDARY INTEREST"
     
     Handling Multiple Aspects of the Same Type:
-    - If existing features already have specific names (e.g., "CAREER GOAL"), and new information is about a different aspect, create a new feature with a different name (e.g., "PERSONAL DEVELOPMENT GOAL", "HEALTH GOAL")
+    - If existing features already have specific names (e.g., "CAREER GOAL"), and new information is about a different aspect, create a new feature with a different name or suffix (e.g., "PERSONAL DEVELOPMENT GOAL", "HEALTH GOAL", or "CAREER GOAL SECONDARY")
     - If existing feature has a generic name (e.g., "GOAL") and new information is about a different aspect:
       * Determine which aspect based on claims (e.g., "career goal" vs "health goal")
       * UPDATE the existing one to be more specific (e.g., "CAREER GOAL")
       * ADD the new one with appropriate name (e.g., "HEALTH GOAL")
+    - If existing feature has no suffix (e.g., "CORE VALUE") and new information is about a different value of the same type:
+      * Determine which is which based on claims (e.g., "family values" vs "career values")
+      * UPDATE the existing one to add appropriate suffix (e.g., "CORE VALUE FAMILY")
+      * ADD the new one with different suffix (e.g., "CORE VALUE CAREER")
     
     Reusing Feature Names:
     - If an existing feature name means the same thing, USE THAT EXACT NAME
-    - Do not create synonyms or variations
+    - Do not create synonyms or variations (e.g., don't use "HOBBY" if "PRIMARY INTEREST" already exists for the same concept)
     - Compare with existing features first - reuse existing feature names when the information matches
+    - For multiple items: Check if a suffix already exists, and use consistent suffix naming
+      * Example: If "INTEREST PHOTOGRAPHY" exists, use "INTEREST COOKING" not "HOBBY COOKING"
+      * Example: If "CORE VALUE FAMILY" exists, use "CORE VALUE CAREER" not "CAREER PRIORITY"
     
     EXTRACTION PROCESS
     
@@ -227,13 +259,15 @@ life_context_consolidation_prompt = """
     - Use UPPERCASE letters with SPACES between words (e.g., "PRIMARY INTEREST", "CAREER GOAL")
     - Use full words, not abbreviations
     - Be descriptive and meaningful - capture the essence of the characteristic
+    - Use consistent naming: don't mix "GOAL" and "ASPIRATION" for the same concept
+    - Prefer specific names over generic ones: "CAREER GOAL" is better than "GOAL"
 
     Standard Feature Names:
-    - Interests: "PRIMARY INTEREST", "PASSION", "HOBBY"
-    - Lifestyle: "WORK LIFE BALANCE STYLE", "EXERCISE HABIT", "FITNESS ROUTINE", "SLEEP PATTERN"
-    - Goals: "CAREER GOAL", "LONG TERM GOAL", "HEALTH GOAL", "FINANCIAL GOAL", "LIFE VISION"
-    - Personality: "COMMUNICATION STYLE", "DECISION MAKING STYLE", "STRESS MANAGEMENT APPROACH", "INTROVERSION LEVEL", "STRESS RESPONSE PATTERN", "PERSONALITY TYPE"
-    - Life Context: "CURRENT LIFE STAGE", "CORE VALUE", "PRIORITY"
+    - Interests: "PRIMARY INTEREST", "SECONDARY INTEREST", "PASSION", or use suffixes like "INTEREST PHOTOGRAPHY", "INTEREST COOKING"
+    - Lifestyle: "WORK LIFE BALANCE STYLE", "EXERCISE HABIT", "FITNESS ROUTINE", "SLEEP PATTERN", "DIETARY HABIT", "DAILY ROUTINE", or use suffixes like "ROUTINE MORNING", "ROUTINE EVENING"
+    - Goals: "CAREER GOAL", "HEALTH GOAL", "FINANCIAL GOAL", "PERSONAL DEVELOPMENT GOAL", "RELATIONSHIP GOAL", "LIFE VISION", "LONG TERM GOAL", "SHORT TERM GOAL", or use suffixes like "CAREER GOAL PRIMARY", "HEALTH GOAL FITNESS"
+    - Personality: "COMMUNICATION STYLE", "DECISION MAKING STYLE", "STRESS MANAGEMENT APPROACH", "SOCIAL PREFERENCE", "CONFLICT RESOLUTION STYLE", "EMOTIONAL PATTERN", "PERSONALITY TYPE"
+    - Life Situation: "CURRENT LIFE STAGE", "CORE VALUE", "PRIORITY", "LIFE CHALLENGE", "LIFE OPPORTUNITY", "FAMILY SITUATION", "WORK SITUATION", or use suffixes like "CORE VALUE FAMILY", "CORE VALUE CAREER"
 
     CONSOLIDATION GUIDELINES:
 
@@ -242,11 +276,17 @@ life_context_consolidation_prompt = """
        - Example: Multiple "PRIMARY INTEREST" features with value "photography" → Keep one, delete others
 
     2. **Different Information (Different Aspect or Evolution)**:
-       - If memories have different values for the same feature name, they represent different aspects or evolution
-       - For goals: Different goals should be kept separate (e.g., "CAREER GOAL" vs "HEALTH GOAL")
+       - If memories have different values for the same feature name, determine if they represent:
+         * Evolution/refinement of the same thing → KEEP the most complete/current version
+         * Different distinct items → UPDATE feature names to use appropriate suffixes
+       - For goals: Different goals should be kept separate with different names or suffixes
        - For personality traits: If values represent evolution or refinement, KEEP the most complete/current version
-       - Example: "CAREER GOAL": "become a manager" and "CAREER GOAL": "become a senior manager" → 
+       - Example (Evolution): "CAREER GOAL": "become a manager" and "CAREER GOAL": "become a senior manager" → 
          Keep "CAREER GOAL": "become a senior manager" (more complete), delete the older one
+       - Example (Different items): "PRIMARY INTEREST": "photography" and "PRIMARY INTEREST": "cooking" → 
+         * Keep "INTEREST PHOTOGRAPHY": "photography"
+         * Keep "INTEREST COOKING": "cooking"
+         * Delete original "PRIMARY INTEREST" entries
 
     3. **Synonym Consolidation**:
        - If memories have the same meaning but different feature names (synonyms), consolidate to use the standard feature name
@@ -267,12 +307,26 @@ life_context_consolidation_prompt = """
          Keep "HEALTH GOAL": "lose weight and exercise more" (more specific), delete generic "GOAL"
 
     6. **Multiple Aspects Handling**:
-       - If memories represent different aspects of the same type, keep them separate with appropriate names
-       - Example: "CAREER GOAL": "become a manager" and "ENTREPRENEURIAL GOAL": "start a side business" → 
-         Keep both (different aspects)
+       - If memories represent different aspects of the same type, keep them separate with appropriate names or suffixes
+       - UPDATE feature names to use appropriate suffixes when needed
+       - Example: "CAREER GOAL": "become a manager" and "CAREER GOAL": "start a side business" → 
+         * Keep "CAREER GOAL PRIMARY": "become a manager"
+         * Keep "CAREER GOAL SECONDARY": "start a side business"
+         * Delete original "CAREER GOAL" entries
+       - Or use descriptive suffixes: "CAREER GOAL MANAGEMENT" and "CAREER GOAL ENTREPRENEURIAL"
        - Don't merge different aspects into a single memory unless they naturally belong together
+       - Don't create suffixes too early. Have at least two distinct items first
+       - Use consistent suffix naming across similar types (e.g., "INTEREST PHOTOGRAPHY", "INTEREST COOKING", not "HOBBY PHOTOGRAPHY", "PASSION COOKING")
 
-    7. **Personality and Lifestyle Evolution**:
+    7. **Handling Multiple Items of the Same Type**:
+       - If existing features already have suffixes (e.g., "INTEREST PHOTOGRAPHY"), and new information is about a different item, create a new feature with a different suffix (e.g., "INTEREST COOKING")
+       - If existing feature has no suffix (e.g., "PRIMARY INTEREST") and new information is about a different item of the same type:
+         * Determine which is which based on content
+         * UPDATE the existing one to add appropriate suffix if needed (e.g., "INTEREST PHOTOGRAPHY")
+         * ADD the new one with different suffix (e.g., "INTEREST COOKING")
+       - Use consistent suffix naming (e.g., "CORE VALUE FAMILY", "CORE VALUE CAREER", not "FAMILY VALUE", "CAREER PRIORITY")
+
+    8. **Personality and Lifestyle Evolution**:
        - For personality traits and lifestyle patterns, if values represent evolution or refinement:
          * Keep the most complete/current version
          * If both are valuable, merge insights into a single comprehensive memory

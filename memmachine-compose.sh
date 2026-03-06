@@ -751,13 +751,23 @@ check_required_config() {
 
 # Pull and start services
 start_services() {
-    local memmachine_image_tmp="${ENV_MEMMACHINE_IMAGE:-}"
-
     print_info "Pulling and starting MemMachine services..."
     
-    # Determine the target image
-    local target_image="${memmachine_image_tmp:-${MEMMACHINE_IMAGE:-memmachine/memmachine:latest}}"
-    print_info "Pulling latest images... (Target: $target_image)"
+    # Determine the target image (command-line arg takes priority over .env)
+    local target_image=""
+    if [ -n "${CMD_MEMMACHINE_IMAGE:-}" ]; then
+        # Command-line argument provided
+        target_image="${CMD_MEMMACHINE_IMAGE}"
+        print_info "Using image from command line: $target_image"
+    elif [ -n "${MEMMACHINE_IMAGE:-}" ]; then
+        # From .env file
+        target_image="${MEMMACHINE_IMAGE}"
+        print_info "Using image from .env: $target_image"
+    else
+        # Default
+        target_image="memmachine/memmachine:latest"
+        print_info "Using default image: $target_image"
+    fi
     
     # Try to pull; if it fails (e.g. local image), warn and proceed with PULL_POLICY=if_not_present
     # We capture the output to suppress "manifest unknown" errors for local images
@@ -779,12 +789,8 @@ start_services() {
         export PULL_POLICY="if_not_present"
     fi
 
-    # Start services (override the image if specified in memmachine-compose.sh start <image>:<tag>)
-    if [ -n "${memmachine_image_tmp:-}" ]; then
-        MEMMACHINE_IMAGE="${memmachine_image_tmp}" $COMPOSE_CMD up -d
-    else
-        $COMPOSE_CMD up -d
-    fi
+    # Start services with the target image
+    MEMMACHINE_IMAGE="${target_image}" $COMPOSE_CMD up -d
     
     print_success "Services started successfully!"
 }
@@ -1089,7 +1095,8 @@ case "${1:-}" in
         ;;
     "start")
         shift
-        ENV_MEMMACHINE_IMAGE="${1:-}"
+        CMD_MEMMACHINE_IMAGE="${1:-}"
+        export CMD_MEMMACHINE_IMAGE
         main
         ;;
     *)

@@ -82,6 +82,10 @@ class SemanticMemoryConf(YamlSerializableMixin):
         default=timedelta(minutes=5),
         description="The amount of time a message is uningested before triggering an ingestion.",
     )
+    consolidation_threshold: int = Field(
+        default=10,
+        description="Minimum number of features per tag to trigger consolidation. Lower values mean more frequent consolidation.",
+    )
 
 
 def _read_txt(filename: str) -> str:

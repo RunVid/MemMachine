@@ -124,6 +124,7 @@ class SemanticResourceManager:
                 resource_retriever=resource_retriever,
                 uningested_time_limit=self._conf.ingestion_trigger_age,
                 uningested_message_limit=self._conf.ingestion_trigger_messages,
+                consolidation_threshold=self._conf.consolidation_threshold,
             ),
         )
         return self._semantic_service

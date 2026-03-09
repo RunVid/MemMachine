@@ -21,6 +21,8 @@ semantic_memory:
   ingestion_trigger_messages: 5
   # ISO 8601 duration format: PT5M = 5 minutes
   ingestion_trigger_age: "PT5M"
+  # Minimum features per tag to trigger consolidation (lower = more frequent cleanup)
+  consolidation_threshold: 10
 
 session_manager:
   database: profile_storage

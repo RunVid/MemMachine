@@ -265,6 +265,7 @@ class SemanticService:
                 semantic_storage=self._semantic_storage,
                 resource_retriever=self._resource_retriever,
                 history_store=self._episode_storage,
+                consolidated_threshold=self._consolidation_threshold,
             ),
         )
 

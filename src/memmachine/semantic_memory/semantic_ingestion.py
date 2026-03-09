@@ -170,6 +170,22 @@ class IngestionService:
                     semantic_category.name,
                 )
 
+                if semantic_category.name == "profile":
+                    # Filter features to only include valid tags for profile category
+                    valid_tags = {"basics", "contacts", "identities", "accounts", "preferences", "relationships", "services", "others"}
+                    original_count = len(features)
+                    features = [f for f in features if f.tag in valid_tags]
+                    filtered_count = original_count - len(features)
+                    
+                    if filtered_count > 0:
+                        logger.info(
+                            "Filtered out %d features with invalid tags for profile category - set_id=%s, message_id=%s, kept=%d features",
+                            filtered_count,
+                            set_id,
+                            message.uid,
+                            len(features),
+                        )
+
                 try:
                     commands = await llm_feature_update(
                         features=features,
@@ -183,6 +199,36 @@ class IngestionService:
                         message.uid,
                         semantic_category.name,
                     )
+                    
+                    # Normalize and validate tags for profile category
+                    if semantic_category.name == "profile":
+                        valid_tags = {"basics", "contacts", "identities", "accounts", "preferences", "relationships", "services", "others"}
+                        corrected_count = 0
+                        for cmd in commands:
+                            original_tag = cmd.tag
+                            # First, convert to lowercase
+                            normalized_tag = cmd.tag.lower().strip()
+                            # Then check if it's in valid tags
+                            if normalized_tag not in valid_tags:
+                                normalized_tag = "others"
+                            
+                            if original_tag != normalized_tag:
+                                corrected_count += 1
+                                logger.info(
+                                    "Corrected tag '%s' -> '%s' for command in message %s",
+                                    original_tag,
+                                    normalized_tag,
+                                    message.uid,
+                                )
+                            cmd.tag = normalized_tag
+                        
+                        if corrected_count > 0:
+                            logger.warning(
+                                "Corrected %d tag(s) for profile category - set_id=%s, message_id=%s",
+                                corrected_count,
+                                set_id,
+                                message.uid,
+                            )
                 except Exception:
                     logger.exception(
                         "Failed to process message %s for semantic type %s",

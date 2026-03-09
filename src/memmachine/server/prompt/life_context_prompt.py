@@ -116,6 +116,22 @@ life_context_description = """
     - Temporary moods or situational feelings
     - Things the user is doing "right now" that won't persist
     
+    ## CRITICAL: NEVER Extract Sensitive Information
+    
+    For security reasons, NEVER extract or store ANY of the following (not even partial):
+    - Social security numbers, passport numbers, driver's license numbers
+    - Credit card numbers, bank account numbers, routing numbers
+    - CVV/security codes, expiration dates, bank PINs
+    - Passwords, PINs, security questions, authentication credentials
+    - Biometric data, medical records, detailed financial records
+    - Any information that could enable identity theft or fraud
+    
+    If the user mentions sensitive information in passing, DO NOT extract it into semantic memory.
+    Such information should never appear in life context features.
+    
+    Note: Life context is about personal insights (interests, goals, personality), NOT account/identity data.
+    Non-sensitive IDs like employee ID or student ID belong in task_assistant_prompt, not here.
+    
     ASK YOURSELF: "Will this information still be accurate in 6 months?"
     - If YES → Extract it
     - If NO → Do NOT extract (it belongs in episodic memory)
@@ -293,15 +309,26 @@ life_context_consolidation_prompt = """
 
     CONSOLIDATION GUIDELINES:
 
-    0. **DELETE TEMPORARY/TRANSIENT INFORMATION (HIGHEST PRIORITY)**:
-       - DELETE any memories containing temporary locations, current whereabouts, or travel information
+    0. **DELETE SENSITIVE AND TEMPORARY INFORMATION (HIGHEST PRIORITY)**:
+    
+       SENSITIVE INFORMATION - DELETE IMMEDIATELY (no partial storage allowed):
+       - DELETE: Any social security numbers (full or partial)
+       - DELETE: Any passport numbers, driver's license numbers
+       - DELETE: Any credit card numbers (full or partial), bank account numbers, routing numbers
+       - DELETE: Passwords, PINs, security questions, authentication credentials, CVV codes
+       - DELETE: Biometric data, detailed medical records, detailed financial records
+       - DELETE: Any information that could enable identity theft or fraud
+       - Life context should NEVER contain sensitive PII - delete any that appears
+       
+       TEMPORARY/TRANSIENT INFORMATION - DELETE:
        - DELETE: "CURRENT LOCATION", "USER LOCATION", "STAYING AT", "TEMPORARY RESIDENCE", or similar
        - DELETE: Airbnb addresses, hotel rooms, vacation rentals, current trips
        - DELETE: Any information with specific dates that indicate it's time-bound
        - DELETE: Current projects, tasks in progress, temporary situations
-       - ASK: "Will this still be true in 6 months?" If NO → DELETE
+       - DELETE: Travel itineraries, current trips, "currently at" information
        - Example: "LIFE SITUATION": "staying at Airbnb in Chicago" → DELETE entirely
        - Example: "USER LOCATION": "currently traveling in Europe" → DELETE entirely
+       - ASK: "Will this still be true in 6 months?" If NO → DELETE
 
     1. **Identical Information (Same Value & Meaning)**: 
        - If memories have identical values and meanings, DELETE duplicates and KEEP only one

@@ -18,10 +18,10 @@ task_assistant_tags: dict[str, str] = {
     # === Core Identity & Contact ===
     "basics": "Basic personal information: full name, date of birth, gender, age, marital status, education level, occupation, and other basic demographic information. IMPORTANT: If information belongs to someone other than the user (e.g., spouse's name, child's date of birth), include ownership in the feature name (e.g., 'SPOUSE FULL NAME', 'CHILD DATE OF BIRTH'). EXCLUDE: Current location, temporary residence, travel status, or any time-bound information.",
     "contacts": "PERMANENT contact information and addresses ONLY: phone numbers, email addresses, permanent home addresses, permanent work addresses, mailing addresses, emergency contacts. IMPORTANT: Always include ownership/relationship in feature names when the contact belongs to someone other than the user (e.g., 'SPOUSE EMAIL', 'CHILD PHONE NUMBER', 'EMERGENCY CONTACT PHONE'). For the user's own contacts, use standard names like 'EMAIL', 'PHONE NUMBER'. EXCLUDE: Temporary addresses (hotels, Airbnbs, vacation rentals), current location, travel destinations.",
-    "identities": "Stable identification numbers and documents (LAST 4 DIGITS ONLY for sensitive IDs): SSN last 4 digits, employee IDs, student IDs, insurance member IDs, loyalty program numbers. NEVER STORE: Full SSN, full passport numbers, full driver's license numbers, full credit card numbers, passwords, PINs, security questions, authentication credentials, biometric data.",
+    "identities": "Personal identification documents and IDs that identify the USER: employee ID, student ID, insurance member ID, professional license numbers, military ID. These are IDs issued to the person. NEVER STORE: SSN (full or partial), passport numbers, driver's license numbers, or any government-issued ID numbers that could enable identity theft.",
     
-    # === Financial & Accounts ===
-    "accounts": "Account information (LAST 4 DIGITS ONLY for sensitive numbers): credit card last 4 digits and card type, bank account last 4 digits, account holder names, account types, subscription account IDs, service account numbers, membership numbers, customer IDs, loyalty program numbers. NEVER STORE: Full credit card numbers, full bank account numbers with routing numbers, CVV/security codes, bank PINs, online banking passwords.",
+    # === Accounts & Memberships ===
+    "accounts": "Service accounts and memberships that identify the user's ACCOUNTS with organizations: customer IDs, subscription IDs, membership numbers, loyalty program numbers, utility account numbers, library card numbers. These are account identifiers issued by services/companies. NEVER STORE: Credit card numbers, bank account numbers, routing numbers, CVV codes, PINs, passwords, or any financial credentials.",
     
     # === Preferences & Settings ===
     "preferences": "LONG-TERM user preferences ONLY: preferred contact methods (phone, email, text), communication style preferences, service preferences (appointment times, service providers), payment methods, dietary preferences, accessibility needs, language preferences, notification preferences, time zone, preferred meeting formats. EXCLUDE: Temporary preferences, situational choices, or context-dependent decisions.",
@@ -61,7 +61,8 @@ task_assistant_description = """
     
     Extract These Stable Structured Facts:
     - PERMANENT contact information (phone, email, permanent home/work addresses)
-    - Stable account information (account numbers, IDs - last 4 digits only)
+    - Non-sensitive account information (membership IDs, customer IDs, subscription IDs)
+    - Non-sensitive identity documents (employee ID, student ID, insurance member ID)
     - LONG-TERM preferences (communication methods, service preferences, payment methods)
     - Relationship information that remains stable (family members, close contacts)
     - Service provider relationships with contact information
@@ -94,21 +95,24 @@ task_assistant_description = """
     
     ## CRITICAL: NEVER Extract Sensitive Information
     
-    For security reasons, NEVER extract or store:
-    - Full social security numbers (only last 4 digits allowed: "SSN LAST4")
-    - Full passport numbers, full driver's license numbers
-    - Full credit card numbers (only last 4 digits allowed: "CREDIT CARD LAST4")
-    - Full bank account numbers with routing numbers (only last 4 digits allowed)
-    - CVV/security codes, expiration dates with CVV
+    For security reasons, NEVER extract or store ANY of the following (not even partial):
+    - Social security numbers (full or partial)
+    - Passport numbers, driver's license numbers
+    - Credit card numbers (full or partial)
+    - Bank account numbers, routing numbers
+    - CVV/security codes, expiration dates
     - Passwords, PINs, security questions, authentication credentials
-    - Complete residential addresses with unit/apartment numbers (use general "HOME ADDRESS" without sensitive details)
     - Biometric data, medical records, detailed financial records
     - Any information that could enable identity theft or fraud
     
-    If the user provides sensitive information, extract ONLY the safe portion:
-    - "My SSN is 123-45-6789" → Extract "SSN LAST4": "6789"
-    - "My credit card is 4111-1111-1111-1234" → Extract "CREDIT CARD LAST4": "1234"
+    If the user provides sensitive information, DO NOT EXTRACT IT AT ALL:
+    - "My SSN is 123-45-6789" → DO NOT EXTRACT
+    - "My credit card is 4111-1111-1111-1234" → DO NOT EXTRACT
     - "My password is secret123" → DO NOT EXTRACT
+    
+    OK to store (non-sensitive IDs):
+    - Employee ID, student ID, insurance member ID, loyalty program number
+    - Subscription IDs, customer IDs, membership numbers
     
     FEATURE NAMING RULES
     
@@ -121,8 +125,7 @@ task_assistant_description = """
     - "FULL NAME" (not "NAME", "USER NAME", "USERNAME")
     - "EMAIL" (not "EMAIL ADDRESS", "CONTACT EMAIL", "E-MAIL")
     - "PHONE NUMBER" (not "PHONE", "MOBILE", "TELEPHONE")
-    - "BANK ACCOUNT LAST4" (not "ACCOUNT", "BANK", "ACCOUNT NUMBER")
-    - "CREDIT CARD LAST4" (not "CARD", "CARD NUMBER")
+    - "EMPLOYEE ID", "STUDENT ID", "MEMBER ID" (non-sensitive IDs - store fully)
     - "PREFERRED PAYMENT METHOD" (not "PAYMENT", "PREFERENCE")
     - "TIMEZONE" (not "TZ", "TIME ZONE")
     - "DATE OF BIRTH" (not "DOB", "BIRTHDATE", "BIRTH DATE")
@@ -131,11 +134,10 @@ task_assistant_description = """
     Multiple Accounts of the Same Type:
     - If the user has multiple accounts of the same type, use SUFFIXES to distinguish them
     - Examples:
-      * Multiple emails: "EMAIL WORK", "EMAIL PERSONAL" (or "EMAIL WORKING", "EMAIL PRIVATE")
+      * Multiple emails: "EMAIL WORK", "EMAIL PERSONAL"
       * Multiple phones: "PHONE NUMBER WORK", "PHONE NUMBER PERSONAL", "MOBILE PHONE", "HOME PHONE"
-      * Multiple bank accounts: "BANK ACCOUNT LAST4 CHECKING", "BANK ACCOUNT LAST4 SAVINGS"
-      * Multiple credit cards: "CREDIT CARD LAST4 VISA", "CREDIT CARD LAST4 AMEX"
       * Multiple addresses: "HOME ADDRESS", "WORK ADDRESS", "MAILING ADDRESS"
+      * Multiple IDs: "EMPLOYEE ID", "STUDENT ID", "INSURANCE MEMBER ID"
     
     Feature Names with Ownership (Information Belonging to Others):
     Format: "[OWNER] [INFORMATION TYPE]"
@@ -191,7 +193,7 @@ task_assistant_description = """
     6. **CRITICAL: For ownership, ALWAYS use the person's name if available (e.g., "ALICE PHONE NUMBER") instead of relationship type (e.g., "FRIEND PHONE NUMBER"). Only use relationship type if the name is unknown.**
     7. **CRITICAL: For duplicate feature names, decide based on claims: if same information → OVERWRITE (UPDATE), if different information → create new with suffix (e.g., "EMAIL WORK" vs "EMAIL PERSONAL")**
     8. Extract ALL structured facts, even basic ones like names and contact details
-    9. For account numbers and IDs, store only the last 4 digits
+    9. For non-sensitive IDs (employee ID, student ID, etc.), store fully; for sensitive info, DO NOT store at all
     10. Include relationship context when extracting family/contact information
     11. Extract service provider information with contact details and specialties
     
@@ -246,8 +248,7 @@ task_assistant_consolidation_prompt = """
     - "FULL NAME" (not "NAME", "USER NAME", "USERNAME")
     - "EMAIL" or "EMAIL WORK", "EMAIL PERSONAL" (for multiple emails)
     - "PHONE NUMBER" or "PHONE NUMBER WORK", "PHONE NUMBER PERSONAL" (for multiple phones)
-    - "BANK ACCOUNT LAST4" or "BANK ACCOUNT LAST4 CHECKING", "BANK ACCOUNT LAST4 SAVINGS" (for multiple accounts)
-    - "CREDIT CARD LAST4" or "CREDIT CARD LAST4 VISA", "CREDIT CARD LAST4 AMEX" (for multiple cards)
+    - "EMPLOYEE ID", "STUDENT ID", "MEMBER ID" (non-sensitive IDs - store fully)
 
     Feature Names with Ownership (Information Belonging to Others):
     - Priority Rule: ALWAYS use the person's name if available (e.g., "ALICE PHONE NUMBER") instead of relationship type (e.g., "FRIEND PHONE NUMBER")
@@ -258,13 +259,13 @@ task_assistant_consolidation_prompt = """
 
     0. **DELETE SENSITIVE AND TEMPORARY INFORMATION (HIGHEST PRIORITY)**:
     
-       SENSITIVE INFORMATION - DELETE IMMEDIATELY:
-       - DELETE: Full social security numbers, full passport numbers, full driver's license numbers
-       - DELETE: Full credit card numbers, full bank account numbers with routing numbers
+       SENSITIVE INFORMATION - DELETE IMMEDIATELY (no partial storage allowed):
+       - DELETE: Any social security numbers (full or partial)
+       - DELETE: Any passport numbers, driver's license numbers
+       - DELETE: Any credit card numbers (full or partial), bank account numbers, routing numbers
        - DELETE: Passwords, PINs, security questions, authentication credentials, CVV codes
-       - DELETE: Complete addresses with apartment/unit numbers that could enable identity theft
        - DELETE: Biometric data, detailed medical records, detailed financial records
-       - KEEP ONLY: Last 4 digits (e.g., "SSN LAST4": "6789", "CREDIT CARD LAST4": "1234")
+       - KEEP: Non-sensitive IDs like employee ID, student ID, member ID, customer ID
        
        TEMPORARY/TRANSIENT INFORMATION - DELETE:
        - DELETE: "USER LOCATION", "CURRENT ADDRESS", "CURRENT LOCATION", "STAYING AT", or similar

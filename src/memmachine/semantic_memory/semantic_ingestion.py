@@ -364,7 +364,7 @@ class IngestionService:
             )
 
             consolidation_sections: list[list[SemanticFeature]] = list(
-                SemanticFeature.group_features_by_tag(features).values(),
+                SemanticFeature.group_features_by_tag_only(features).values(),
             )
 
             await asyncio.gather(

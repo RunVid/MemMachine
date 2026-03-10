@@ -94,6 +94,7 @@ class SemanticFeature(BaseModel):
     def group_features_by_tag(
         features: list["SemanticFeature"],
     ) -> dict[tuple[str, str], list["SemanticFeature"]]:
+        """Group features by (tag, feature_name) for fine-grained processing."""
         grouped_features: dict[tuple[str, str], list[SemanticFeature]] = {}
 
         for f in features:
@@ -103,6 +104,21 @@ class SemanticFeature(BaseModel):
                 grouped_features[key] = []
 
             grouped_features[key].append(f)
+
+        return grouped_features
+
+    @staticmethod
+    def group_features_by_tag_only(
+        features: list["SemanticFeature"],
+    ) -> dict[str, list["SemanticFeature"]]:
+        """Group features by tag only for consolidation."""
+        grouped_features: dict[str, list[SemanticFeature]] = {}
+
+        for f in features:
+            if f.tag not in grouped_features:
+                grouped_features[f.tag] = []
+
+            grouped_features[f.tag].append(f)
 
         return grouped_features
 

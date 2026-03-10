@@ -150,10 +150,15 @@ task_assistant_consolidation_prompt = """
     ## RULES
 
     ### Tags
-    Only use: basics, contacts, identities, accounts, preferences, relationships, services, others
+
+    - All input memories have the SAME tag. Your output memories MUST use the SAME tag as the input.
+    - DO NOT change tags during consolidation. If input tag is "accounts", output tag for all consolidation memory MUST be "accounts".   
     - CRITICAL: Tags MUST be lowercase (e.g., "accounts" NOT "ACCOUNTS" or "Accounts")
+
     ### Feature Names
+
     - UPPERCASE with SPACES (e.g., "PHONE NUMBER", "EMAIL")
+    - No underscores or other special characters in feature names
     - Use suffixes for multiple accounts: "EMAIL WORK", "EMAIL PERSONAL"
     - For ownership: use name if available ("ALICE PHONE NUMBER"), otherwise relationship ("SPOUSE EMAIL")
 

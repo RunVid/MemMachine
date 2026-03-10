@@ -185,6 +185,21 @@ class IngestionService:
                             message.uid,
                             len(features),
                         )
+                elif semantic_category.name == "profile_life_context":
+                    # Filter features to only include valid tags for profile_life_context category
+                    valid_tags = {"interests", "lifestyle", "goals", "personality", "life_situation"}
+                    original_count = len(features)
+                    features = [f for f in features if f.tag in valid_tags]
+                    filtered_count = original_count - len(features)
+                    
+                    if filtered_count > 0:
+                        logger.info(
+                            "Filtered out %d features with invalid tags for profile_life_context category - set_id=%s, message_id=%s, kept=%d features",
+                            filtered_count,
+                            set_id,
+                            message.uid,
+                            len(features),
+                        )
 
                 try:
                     commands = await llm_feature_update(
@@ -203,6 +218,7 @@ class IngestionService:
                     # Normalize and validate tags for profile category
                     if semantic_category.name == "profile":
                         valid_tags = {"basics", "contacts", "identities", "accounts", "preferences", "relationships", "services", "others"}
+                        default_tag = "others"
                         corrected_count = 0
                         for cmd in commands:
                             original_tag = cmd.tag
@@ -210,7 +226,7 @@ class IngestionService:
                             normalized_tag = cmd.tag.lower().strip()
                             # Then check if it's in valid tags
                             if normalized_tag not in valid_tags:
-                                normalized_tag = "others"
+                                normalized_tag = default_tag
                             
                             if original_tag != normalized_tag:
                                 corrected_count += 1
@@ -225,6 +241,35 @@ class IngestionService:
                         if corrected_count > 0:
                             logger.warning(
                                 "Corrected %d tag(s) for profile category - set_id=%s, message_id=%s",
+                                corrected_count,
+                                set_id,
+                                message.uid,
+                            )
+                    elif semantic_category.name == "profile_life_context":
+                        valid_tags = {"interests", "lifestyle", "goals", "personality", "life_situation"}
+                        default_tag = "interests"  # Default to interests as it's the most general
+                        corrected_count = 0
+                        for cmd in commands:
+                            original_tag = cmd.tag
+                            # First, convert to lowercase
+                            normalized_tag = cmd.tag.lower().strip()
+                            # Then check if it's in valid tags
+                            if normalized_tag not in valid_tags:
+                                normalized_tag = default_tag
+                            
+                            if original_tag != normalized_tag:
+                                corrected_count += 1
+                                logger.info(
+                                    "Corrected tag '%s' -> '%s' for command in message %s",
+                                    original_tag,
+                                    normalized_tag,
+                                    message.uid,
+                                )
+                            cmd.tag = normalized_tag
+                        
+                        if corrected_count > 0:
+                            logger.warning(
+                                "Corrected %d tag(s) for profile_life_context category - set_id=%s, message_id=%s",
                                 corrected_count,
                                 set_id,
                                 message.uid,
@@ -400,6 +445,9 @@ class IngestionService:
             set_id,
             semantic_category.name,
         )
+
+        original_tag = memories[0].tag if len(memories) > 0 else None
+
         try:
             consolidate_resp = await llm_consolidate_features(
                 features=memories,
@@ -452,6 +500,32 @@ class IngestionService:
         citation_ids = TypeAdapter(list[EpisodeIdT]).validate_python(
             list(merged_citations),
         )
+
+        # Ensure consolidated memories maintain the same tag as input memories
+        # All input memories should have the same tag (grouped by tag)
+        if original_tag and consolidate_resp.consolidated_memories:
+            expected_tag = original_tag
+            corrected_count = 0
+            
+            for f in consolidate_resp.consolidated_memories:
+                if f.tag != expected_tag:
+                    corrected_count += 1
+                    logger.warning(
+                        "Consolidation changed tag from '%s' to '%s' for feature '%s' - fixing to maintain input tag",
+                        expected_tag,
+                        f.tag,
+                        f.feature,
+                    )
+                    f.tag = expected_tag
+            
+            if corrected_count > 0:
+                logger.warning(
+                    "Fixed %d consolidated tag(s) to maintain input tag '%s' - set_id=%s, category=%s",
+                    corrected_count,
+                    expected_tag,
+                    set_id,
+                    semantic_category.name,
+                )
 
         async def _add_feature(f: LLMReducedFeature) -> None:
             value_embedding = (await resources.embedder.ingest_embed([f.value]))[0]

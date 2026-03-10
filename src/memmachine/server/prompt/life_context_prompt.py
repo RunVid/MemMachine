@@ -177,11 +177,14 @@ life_context_consolidation_prompt = """
     ## RULES
 
     ### Tags
-    Only use: interests, lifestyle, goals, personality, life_situation
+    
+    - All input memories have the SAME tag. Your output memories MUST use the SAME tag as the input.
+    - DO NOT change tags during consolidation. If input tag is "interests", output tag for all consolidation memory MUST be "interests".
     - CRITICAL: Tags MUST be lowercase (e.g., "interests" NOT "INTERESTS" or "Interests")
 
     ### Feature Names
     - UPPERCASE with SPACES (e.g., "PRIMARY INTEREST", "CAREER GOAL")
+    - No underscores or other special characters in feature names
     - MUST NOT use underscores or other special characters in feature names
     - For multiple items of same type, use descriptive suffixes: "INTEREST PHOTOGRAPHY", "INTEREST COOKING"
     - Standard names:

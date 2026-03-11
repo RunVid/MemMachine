@@ -34,7 +34,7 @@ def build_update_prompt(*, tags: dict[str, str], description: str = "") -> str:
             "0": {
                 "command": "add",
                 "tag": "preferences",
-                "feature": "unicode_for_math",
+                "feature": "UNICODE FOR MATH",
                 "value": true
             }
         }
@@ -43,7 +43,7 @@ def build_update_prompt(*, tags: dict[str, str], description: str = "") -> str:
             "0": {
                 "command": "delete",
                 "tag": "preferences",
-                "feature": "format"
+                "feature": "FORMAT"
             }
         }
         The following will update a feature:
@@ -51,13 +51,13 @@ def build_update_prompt(*, tags: dict[str, str], description: str = "") -> str:
             "0": {
                 "command": "delete",
                 "tag": "preferences",
-                "feature": "prefers_detailed_responses",
+                "feature": "PREFERS DETAILED RESPONSES",
                 "value": true
             },
             "1": {
                 "command": "add",
                 "tag": "preferences",
-                "feature": "prefers_detailed_response",
+                "feature": "PREFERS DETAILED RESPONSE",
                 "value": false
             }
         }
@@ -67,8 +67,8 @@ def build_update_prompt(*, tags: dict[str, str], description: str = "") -> str:
         {
             "0": {
                 "command": "add",
-                "tag": "Demographic Information",
-                "feature": "name",
+                "tag": "basics",
+                "feature": "NAME",
                 "value": "Katara"
             }
         }
@@ -76,14 +76,14 @@ def build_update_prompt(*, tags: dict[str, str], description: str = "") -> str:
         {
             "0": {
                 "command": "add",
-                "tag": "Hobbies & Interests",
-                "feature": "home_cook",
+                "tag": "preferences",
+                "feature": "HOME COOK",
                 "value": "User cooks fancy food"
             },
             "1":{
                 "command": "add",
-                "tag": "Financial Profile",
-                "feature": "upper_class",
+                "tag": "preferences",
+                "feature": "UPPER CLASS",
                 "value": "User entertains guests at dinner parties, suggesting affluence."
             }
         }
@@ -91,26 +91,26 @@ def build_update_prompt(*, tags: dict[str, str], description: str = "") -> str:
         {
             "0": {
                 "command": "add",
-                "tag": "Psychological Profile",
-                "feature": "work_superior_frustration",
+                "tag": "others",
+                "feature": "WORK SUPERIOR FRUSTRATION",
                 "value": "User is frustrated with their boss for perceived incompetence"
             },
             "1": {
                 "command": "add",
-                "tag": "Demographic Information",
-                "feature": "summer_job",
+                "tag": "basics",
+                "feature": "SUMMER JOB",
                 "value": "User is working a temporary job for the summer"
             },
             "2": {
                 "command": "add",
-                "tag": "Communication Style",
-                "feature": "informal_speech",
+                "tag": "preferences",
+                "feature": "INFORMAL SPEECH",
                 "value": "User speaks with all lower case letters and contemporary slang terms."
             },
             "3": {
                 "command": "add",
-                "tag": "Demographic Information",
-                "feature": "young_adult",
+                "tag": "basics",
+                "feature": "YOUNG ADULT",
                 "value": "User is young, possibly still in college"
             }
         }
@@ -118,20 +118,20 @@ def build_update_prompt(*, tags: dict[str, str], description: str = "") -> str:
         {
             "0": {
                 "command": "add",
-                "tag": "Demographic Information",
-                "feature": "traditional_office_job",
+                "tag": "basics",
+                "feature": "TRADITIONAL OFFICE JOB",
                 "value": "User does clerical work, reporting to a manager"
             },
             "1": {
                 "command": "add",
-                "tag": "Demographic Information",
-                "feature": "client_facing_role",
+                "tag": "basics",
+                "feature": "CLIENT FACING ROLE",
                 "value": "User handles communication of deadlines to and from clients"
             },
             "2": {
                 "command": "add",
-                "tag": "Demographic Information",
-                "feature": "autonomy_at_work",
+                "tag": "basics",
+                "feature": "AUTONOMY AT WORK",
                 "value": "User sets their own deadlines and subtasks."
             }
         }

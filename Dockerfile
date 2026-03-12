@@ -23,6 +23,7 @@ WORKDIR /app
 
 # Determine whether to include GPU dependencies
 ARG GPU="false"
+ARG OTEL="false"
 ARG SCM_VERSION="0.0.0"
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SCM_VERSION}
 
@@ -34,8 +35,12 @@ COPY README.md README.md
 
 # Install dependencies into a virtual environment, but NOT the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ "$GPU" = "true" ]; then \
+    if [ "$GPU" = "true" ] && [ "$OTEL" = "true" ]; then \
+    uv sync --locked --no-install-project --no-editable --no-dev --extra gpu --extra otel; \
+    elif [ "$GPU" = "true" ]; then \
     uv sync --locked --no-install-project --no-editable --no-dev --extra gpu; \
+    elif [ "$OTEL" = "true" ]; then \
+    uv sync --locked --no-install-project --no-editable --no-dev --extra otel; \
     else \
     uv sync --locked --no-install-project --no-editable --no-dev; \
     fi
@@ -45,8 +50,12 @@ COPY . /app
 
 # Install the project itself from the local source
 RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ "$GPU" = "true" ]; then \
+    if [ "$GPU" = "true" ] && [ "$OTEL" = "true" ]; then \
+    uv sync --locked --no-editable --no-dev --extra gpu --extra otel; \
+    elif [ "$GPU" = "true" ]; then \
     uv sync --locked --no-editable --no-dev --extra gpu; \
+    elif [ "$OTEL" = "true" ]; then \
+    uv sync --locked --no-editable --no-dev --extra otel; \
     else \
     uv sync --locked --no-editable --no-dev; \
     fi

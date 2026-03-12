@@ -87,6 +87,28 @@ def start_http() -> None:
     """Run the FastAPI HTTP application using the uvicorn server."""
     config = load_configuration()
 
+    # Setup OpenTelemetry metrics if enabled
+    otel_enabled = os.getenv("OTEL_METRICS_ENABLED", "false").lower() == "true"
+    if otel_enabled:
+        try:
+            from memmachine.server.otel_metrics import setup_otel_metrics
+
+            meter = setup_otel_metrics()
+            if meter:
+                logger.info("✅ OpenTelemetry metrics enabled - pushing to OTEL collector")
+            else:
+                logger.warning(
+                    "⚠️ OpenTelemetry metrics setup failed - falling back to Prometheus"
+                )
+        except ImportError:
+            logger.warning(
+                "⚠️ OpenTelemetry dependencies not installed. "
+                "Install with: pip install opentelemetry-api opentelemetry-sdk "
+                "opentelemetry-exporter-otlp-proto-grpc"
+            )
+    else:
+        logger.info("Using Prometheus metrics (OTEL_METRICS_ENABLED=false)")
+
     # Determine number of workers.
     # Note: We do not use (os.cpu_count() - 1) as this is often inaccurate in container
     # environments (reporting host CPUs vs container limits). We leave it to the

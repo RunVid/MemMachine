@@ -36,6 +36,19 @@ class WithMetricsFactory:
             match factory_id:
                 case "prometheus":
                     self._factories[factory_id] = PrometheusMetricsFactory()
+                case "otel":
+                    # Lazy import to avoid dependency if not using OTEL
+                    from memmachine.server.otel_metrics import (
+                        OTELMetricsFactory,
+                        setup_otel_metrics,
+                    )
+
+                    meter = setup_otel_metrics()
+                    if meter is None:
+                        # Fall back to Prometheus if OTEL setup fails
+                        self._factories[factory_id] = PrometheusMetricsFactory()
+                    else:
+                        self._factories[factory_id] = OTELMetricsFactory(meter)
                 case _:
                     raise UnknownMetricsFactoryError(
                         f"Unknown MetricsFactory name: {factory_id}"

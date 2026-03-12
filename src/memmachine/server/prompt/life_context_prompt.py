@@ -53,6 +53,8 @@ life_context_description = """
     
     ## WHAT TO EXTRACT
     
+    **ONLY extract STATIC, FACTUAL DATA VALUES - NOT actions or events.**
+    
     Stable, long-term information:
     - Interests: hobbies, passions, creative pursuits, learning interests, entertainment preferences
     - Lifestyle: daily routines, sleep patterns, exercise habits, dietary habits, work-life balance
@@ -61,7 +63,17 @@ life_context_description = """
     - Life Situation: living situation (city/region), family structure, work situation, major life stage
     - Values: core values, priorities, what drives decisions
     
-    Key Question: "Will this still be accurate in 6 months?" If YES → extract. If NO → skip.
+    **CRITICAL: Extract ONLY the personal characteristic itself, NOT the action or event.**
+    
+    Examples of CORRECT extraction:
+    - "I exercise 3 times a week" → feature="EXERCISE HABIT", value="exercises 3 times a week" ✓
+    - "My goal is to become a senior manager" → feature="CAREER GOAL", value="become a senior manager" ✓
+    - "I prefer working alone" → feature="SOCIAL PREFERENCE", value="prefers working alone" ✓
+    
+    Key Questions:
+    1. "Is this a stable personal characteristic (interest, habit, goal, trait)?" If YES → extract. If NO → skip.
+    2. "Does this describe an action or event?" If YES → skip (episodic memory handles this).
+    3. "Will this still be accurate in 6 months?" If YES → extract. If NO → skip.
     
     ## WHAT NOT TO EXTRACT
     
@@ -70,6 +82,13 @@ life_context_description = """
     - Historical events, past actions, current projects or specific tasks
     - Temporary moods, situational feelings, context-dependent choices
     - Time-bound information (e.g., "going to gym today" vs stable "exercises regularly")
+    - Actions or events: "User started X", "User decided Y", "User completed Z"
+    - Timestamps of actions: "started on March 12", "decided yesterday"
+    
+    Examples of INCORRECT extraction (DO NOT DO THIS):
+    - "User started exercising on March 12" → DO NOT EXTRACT (this is an action/event)
+    - "User decided to learn photography" → DO NOT EXTRACT (this is an action/event)
+    - "User completed career goal yesterday" → DO NOT EXTRACT (this is an action/event)
     
     ### Structured Facts (belongs in task_assistant_prompt)
     - Contact info (phone, email), IDs, account numbers
@@ -146,11 +165,13 @@ life_context_description = """
     
     ## EXTRACTION PROCESS
     
+    **REMEMBER: Extract ONLY static personal characteristics, NEVER actions or events.**
+    
     1. Compare with existing features to identify duplicates or updates
     2. Select the correct tag (DO NOT create new tags)
     3. Use specific, descriptive feature names (avoid vague names like "PRIMARY INTEREST")
     4. For duplicates: same info → UPDATE, different info → create with descriptive suffix
-    5. Extract INSIGHTS and UNDERSTANDING, not just surface facts
+    5. Extract the characteristic itself (e.g., "exercises 3 times a week"), NOT the action (e.g., "User started exercising")
     6. Look for underlying motivations, values, and personality traits
     7. Avoid extracting sensitive PII or temporary states
     
@@ -198,6 +219,13 @@ life_context_consolidation_prompt = """
 
     ### 0. DELETE FIRST (Highest Priority)
 
+    **Actions/Events - DELETE:**
+    - "User started X on [date]"
+    - "User decided Y"
+    - "User completed Z yesterday"
+    - Any value describing an action or event instead of a static characteristic
+    - ASK: "Is this a static characteristic or an action?" If ACTION → DELETE
+
     **Highly Sensitive PII - DELETE:**
     - SSN, passport numbers, driver's license numbers
     - Credit card/bank account numbers
@@ -214,6 +242,7 @@ life_context_consolidation_prompt = """
     - Long-term interests, stable lifestyle patterns
     - Personality traits, life goals
     - Core values, stable life circumstances
+    - ONLY if the value is the actual characteristic (e.g., "exercises regularly"), NOT an action description
 
     ### 1. Identical or Nearly Identical Information
     
@@ -271,8 +300,12 @@ life_context_consolidation_prompt = """
 
     ## AGGRESSIVE DELETION
 
+    **REMEMBER: This is PROFILE data storage, NOT event logging.**
+    
     More memories = more interference = more cognitive load.
     Be aggressive: some distinctions aren't worth maintaining. Delete ruthlessly.
+    
+    DELETE any memory that describes an action or event rather than a static personal characteristic.
     
     **IMPORTANT:** Vague feature names like "PRIMARY INTEREST" and "SECONDARY INTEREST" should be replaced with specific names like "INTEREST PHOTOGRAPHY", "INTEREST COOKING".
 

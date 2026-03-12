@@ -857,7 +857,10 @@ show_service_info() {
 build_image() {
     local name=""
     local force="false"
-    local gpu="false" # default to false
+    local gpu=""
+    local otel=""
+    local gpu_set=false
+    local otel_set=false
     local platform="linux/amd64" # default to amd64
     local push="false"
     local reply=""
@@ -891,6 +894,11 @@ build_image() {
         case "$key" in
             --gpu)
                 gpu="$value"
+                gpu_set=true
+                ;;
+            --otel)
+                otel="$value"
+                otel_set=true
                 ;;
             --platform)
                 platform="$value"
@@ -913,7 +921,8 @@ build_image() {
         name="memmachine/memmachine:latest"
     fi
 
-    if [[ "$force" == "false" ]]; then
+    # Only prompt for values that weren't explicitly set
+    if [[ "$gpu_set" == "false" ]]; then
         print_prompt
         read -p "Building $name with '--build-arg GPU=[true|false]' (default: false): " reply
         gpu=$(echo "${reply:-false}" | tr '[:upper:]' '[:lower:]')
@@ -921,8 +930,24 @@ build_image() {
             print_error "Invalid value for GPU: $gpu"
             exit 1
         fi
-    else
-        print_info "Building $name with '--build-arg GPU=$gpu'"
+    fi
+    
+    if [[ "$otel_set" == "false" ]]; then
+        print_prompt
+        read -p "Building $name with '--build-arg OTEL=[true|false]' (default: false): " reply
+        otel=$(echo "${reply:-false}" | tr '[:upper:]' '[:lower:]')
+        if [[ "$otel" != "true" && "$otel" != "false" ]]; then
+            print_error "Invalid value for OTEL: $otel"
+            exit 1
+        fi
+    fi
+    
+    # Set defaults if still empty
+    gpu=${gpu:-false}
+    otel=${otel:-false}
+    
+    if [[ "$gpu_set" == "true" ]] || [[ "$otel_set" == "true" ]]; then
+        print_info "Building $name with '--build-arg GPU=$gpu --build-arg OTEL=$otel'"
     fi
 
     # Proceed with build after validation passes
@@ -964,7 +989,10 @@ build_image() {
     # Build arguments
     local build_args=""
     if [[ "$gpu" == "true" ]]; then
-        build_args="--build-arg GPU=true"
+        build_args="$build_args --build-arg GPU=true"
+    fi
+    if [[ "$otel" == "true" ]]; then
+        build_args="$build_args --build-arg OTEL=true"
     fi
     
     # Build command
@@ -986,7 +1014,7 @@ build_image() {
     
     build_cmd="$build_cmd ."
     
-    print_info "Building $name with GPU=$gpu, platform=$platform (SCM_VERSION: $scm_version)"
+    print_info "Building $name with GPU=$gpu, OTEL=$otel, platform=$platform (SCM_VERSION: $scm_version)"
     if [[ "$push" == "true" ]]; then
         print_info "Will push to registry after build"
     fi
@@ -1063,7 +1091,7 @@ case "${1:-}" in
         echo "  restart                                                Restart MemMachine services"
         echo "  logs                                                   Show service logs"
         echo "  clean                                                  Remove all services and data"
-        echo "  build [<image>:<tag>] [--gpu true/false] [--platform <platform>] [--push] [-f|--force]  Build a custom MemMachine image"
+        echo "  build [<image>:<tag>] [--gpu true/false] [--otel true/false] [--platform <platform>] [--push] [-f|--force]  Build a custom MemMachine image"
         echo "  help                                                   Show this help message"
         echo ""
         echo "Provider Options:"

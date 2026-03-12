@@ -48,6 +48,8 @@ task_assistant_description = """
     
     ## WHAT TO EXTRACT
     
+    **ONLY extract STATIC, FACTUAL DATA VALUES - NOT actions or events.**
+    
     Stable, long-term information:
     - Permanent contact info: phone numbers, email addresses, home/work addresses
     - Personal IDs: employee ID, student ID, insurance member ID, professional licenses
@@ -56,7 +58,16 @@ task_assistant_description = """
     - Relationships: family members, close friends, business contacts with their info
     - Service providers: doctor, lawyer, accountant with their contact details
     
-    Key Question: "Will this still be accurate in 6 months?" If YES → extract. If NO → skip.
+    **CRITICAL: Extract ONLY the data value itself, NOT the action or event.**
+    
+    Examples of CORRECT extraction:
+    - "My email is john@example.com" → feature="EMAIL", value="john@example.com" ✓
+    - "My employee ID is E12345" → feature="EMPLOYEE ID", value="E12345" ✓
+    - "I prefer email for communication" → feature="PREFERRED CONTACT METHOD", value="email" ✓
+    
+    Key Questions:
+    1. "Is this a static data value (name, email, ID, preference)?" If YES → extract. If NO → skip.
+    2. "Does this describe an action or event?" If YES → skip (episodic memory handles this).
     
     ## WHAT NOT TO EXTRACT
     
@@ -65,6 +76,13 @@ task_assistant_description = """
     - Historical events, past actions, one-time transactions
     - Pending states, appointments, scheduled events
     - Context-dependent choices (e.g., "wants pizza today" vs stable "prefers Italian food")
+    - Actions or events: "User confirmed X", "User updated Y", "User verified Z"
+    - Timestamps of actions: "confirmed on March 12", "updated at 3pm"
+    
+    Examples of INCORRECT extraction (DO NOT DO THIS):
+    - "User confirmed email on March 12" → DO NOT EXTRACT (this is an action/event)
+    - "User updated phone number" → DO NOT EXTRACT (this is an action/event)
+    - "User verified address today" → DO NOT EXTRACT (this is an action/event)
     
     ### Highly Sensitive PII (never store for security)
     - Government IDs: SSN, passport numbers, driver's license numbers
@@ -74,9 +92,11 @@ task_assistant_description = """
     - Biometric data, complete addresses with unit/apartment numbers
     
     Examples:
-    - "My SSN is 123-45-6789" → DO NOT EXTRACT
+    - "My SSN is 123-45-6789" → DO NOT EXTRACT (sensitive)
     - "Staying at Airbnb at 123 Main St" → DO NOT EXTRACT (temporary)
     - "I live at 123 Main St, Apt 4B" → Extract "123 Main St" as HOME ADDRESS (no unit)
+    - "User confirmed email on March 12" → DO NOT EXTRACT (action/event)
+    - "User verified phone number today" → DO NOT EXTRACT (action/event)
     
     ## FEATURE NAMING RULES
     
@@ -119,12 +139,14 @@ task_assistant_description = """
     
     ## EXTRACTION PROCESS
     
+    **REMEMBER: Extract ONLY static data values, NEVER actions or events.**
+    
     1. Compare with existing features to identify duplicates or updates
     2. Select the correct tag (DO NOT create new tags)
     3. Use standard feature names
     4. Include ownership prefix if information belongs to someone else (use name if available)
     5. For duplicates: same info → UPDATE, different info → create with suffix
-    6. Extract ALL structured facts, even basic ones
+    6. Extract ONLY the factual data value (e.g., "john@example.com"), NOT the action (e.g., "User confirmed email")
     7. For non-sensitive IDs, store fully; for sensitive info, DO NOT store
     
     Priority: contacts/basics > accounts/identities > preferences > relationships/services
@@ -166,6 +188,13 @@ task_assistant_consolidation_prompt = """
 
     ### 0. DELETE FIRST (Highest Priority)
 
+    **Actions/Events - DELETE:**
+    - "User confirmed X on [date]"
+    - "User verified Y today"
+    - "User updated Z"
+    - Any value describing an action or event instead of static data
+    - ASK: "Is this a static data value or an action?" If ACTION → DELETE
+
     **Highly Sensitive PII - DELETE:**
     - SSN, passport numbers, driver's license numbers
     - Credit card/bank account numbers, routing numbers
@@ -183,6 +212,7 @@ task_assistant_consolidation_prompt = """
     - Names, emails, phone numbers, general addresses (no unit)
     - Employee ID, student ID, member ID, customer ID
     - Birthdate, occupation, preferences
+    - ONLY if the value is the actual data (e.g., "john@example.com"), NOT an action description
 
     ### 1. Identical or Nearly Identical Information
     
@@ -224,8 +254,12 @@ task_assistant_consolidation_prompt = """
 
     ## AGGRESSIVE DELETION
 
+    **REMEMBER: This is PROFILE data storage, NOT event logging.**
+    
     More memories = more interference = more cognitive load.
     Be aggressive: some distinctions aren't worth maintaining. Delete ruthlessly.
+    
+    DELETE any memory that describes an action, event, or confirmation rather than a static data value.
 
     ## OUTPUT FORMAT
 

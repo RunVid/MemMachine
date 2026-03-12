@@ -1,0 +1,7 @@
+# OpenTelemetry dependencies for pushing metrics to SigNoz
+# Install with: pip install -r requirements-otel.txt
+
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+opentelemetry-exporter-otlp-proto-grpc>=1.20.0
+opentelemetry-instrumentation-fastapi>=0.41b0

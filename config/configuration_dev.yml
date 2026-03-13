@@ -1,0 +1,89 @@
+logging:
+  path: ""
+  level: debug
+
+episode_store:
+  database: profile_storage
+
+episodic_memory:
+  long_term_memory:
+    embedder: openai_embedder
+    reranker: rrf_hybrid_reranker
+    vector_graph_store: neo4j_vector_store
+  short_term_memory:
+    llm_model: openai_model
+    message_capacity: 500
+
+semantic_memory:
+  llm_model: openai_model
+  embedding_model: openai_embedder
+  database: profile_storage
+  ingestion_trigger_messages: 5
+  ingestion_trigger_age: "PT5M"
+
+session_manager:
+  database: profile_storage
+
+prompt:
+  profile:
+    - task_assistant_prompt
+    - life_context_prompt
+  session: []
+  role: []
+
+resources:
+  databases:
+    profile_storage:
+      provider: postgres
+      config:
+        host: memmachine-postgres.pine-local-env.local
+        port: 5432
+        user: memmachine
+        password: memmachine_dev_password
+        db_name: memmachine
+        pool_size: 5
+        max_overflow: 10
+    neo4j_vector_store:
+      provider: neo4j
+      config:
+        uri: 'bolt://memmachine-neo4j.pine-local-env.local:7687'
+        user: neo4j
+        password: memmachine_neo4j_dev_password
+        database: neo4j
+        max_connection_pool_size: 100
+        connection_acquisition_timeout: 60.0
+        range_index_creation_threshold: 10000
+        vector_index_creation_threshold: 10000
+
+  embedders:
+    openai_embedder:
+      provider: openai
+      config:
+        model: "text-embedding-3-small"
+        api_key: $OPENAI_API_KEY
+        base_url: "https://api.openai.com/v1"
+        dimensions: 1536
+
+  language_models:
+    openai_model:
+      provider: openai-responses
+      config:
+        model: "gpt-4o-mini"
+        api_key: $OPENAI_API_KEY
+        base_url: "https://api.openai.com/v1"
+
+  rerankers:
+    rrf_hybrid_reranker:
+      provider: "rrf-hybrid"
+      config:
+        reranker_ids:
+          - id_ranker_id
+          - bm_ranker_id
+    id_ranker_id:
+      provider: "identity"
+    bm_ranker_id:
+      provider: "bm25"
+
+server:
+  host: "0.0.0.0"
+  port: 8080

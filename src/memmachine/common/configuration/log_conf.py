@@ -47,7 +47,7 @@ class LogConf(YamlSerializableMixin):
         default="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
         description="Logging format string",
     )
-    path: str = Field(
+    path: str | None = Field(
         default="MemMachine.log",
         description="Path to log file (if empty, logs only to stdout).",
     )

@@ -12,6 +12,7 @@ from nltk import sent_tokenize
 from pydantic import BaseModel, Field, InstanceOf
 
 from memmachine.common.embedder.embedder import Embedder
+from memmachine.common.data_types import SimilarityMetric
 from memmachine.common.filter.filter_parser import (
     And as FilterAnd,
 )
@@ -393,43 +394,68 @@ class DeclarativeMemory:
             logger.warning("No valid embeddings found in derivative nodes")
             return []
         
-        # Calculate cosine similarity with query
+        # Calculate similarity scores with the configured metric
         query_emb_np = np.array(query_embedding)
         derivative_emb_np = np.array(derivative_embeddings)
-        
-        dot_products = np.dot(derivative_emb_np, query_emb_np)
-        query_norm = np.linalg.norm(query_emb_np)
-        derivative_norms = np.linalg.norm(derivative_emb_np, axis=1)
-        derivative_norms[derivative_norms == 0] = 1.0  # Avoid division by zero
-        
-        derivative_similarities = dot_products / (derivative_norms * query_norm)
-        
-        # Minimum cosine similarity threshold for relevance
-        # 0.3 = loosely related, 0.5 = moderately related, 0.7 = highly related
-        MIN_VECTOR_SIMILARITY = 0.4
-        
+        similarity_metric = self._embedder.similarity_metric
+
+        match similarity_metric:
+            case SimilarityMetric.COSINE:
+                # Cosine similarity in range [-1, 1]
+                magnitude_products = (
+                    np.linalg.norm(derivative_emb_np, axis=-1) * np.linalg.norm(query_emb_np)
+                )
+                magnitude_products[magnitude_products == 0] = float("inf")
+                scores = (np.dot(derivative_emb_np, query_emb_np) / magnitude_products)
+            case SimilarityMetric.DOT:
+                # Raw dot product (scale depends on embedding norms)
+                scores = np.dot(derivative_emb_np, query_emb_np)
+            case SimilarityMetric.EUCLIDEAN:
+                # Negative distance so that higher is better
+                scores = -np.linalg.norm(derivative_emb_np - query_emb_np, axis=-1)
+            case SimilarityMetric.MANHATTAN:
+                # Negative L1 distance so that higher is better
+                scores = -np.sum(np.abs(derivative_emb_np - query_emb_np), axis=-1)
+            case _:
+                # Default to cosine similarity
+                magnitude_products = (
+                    np.linalg.norm(derivative_emb_np, axis=-1) * np.linalg.norm(query_emb_np)
+                )
+                magnitude_products[magnitude_products == 0] = float("inf")
+                scores = (np.dot(derivative_emb_np, query_emb_np) / magnitude_products)
+
         # Log similarity distribution
         logger.info(
-            "Derivative similarity scores - min: %.3f, max: %.3f, mean: %.3f, count: %d",
-            float(np.min(derivative_similarities)),
-            float(np.max(derivative_similarities)),
-            float(np.mean(derivative_similarities)),
-            len(derivative_similarities),
+            "Derivative similarity scores (%s) - min: %.3f, max: %.3f, mean: %.3f, count: %d",
+            similarity_metric.value,
+            float(np.min(scores)),
+            float(np.max(scores)),
+            float(np.mean(scores)),
+            len(scores),
         )
-        
-        # Filter derivatives by similarity threshold BEFORE contextualization
-        filtered_derivative_nodes = [
-            node
-            for node, sim in zip(valid_derivative_nodes, derivative_similarities)
-            if sim >= MIN_VECTOR_SIMILARITY
-        ]
-        
-        logger.info(
-            "Early filtering: kept %d/%d derivatives with similarity >= %.2f",
-            len(filtered_derivative_nodes),
-            len(valid_derivative_nodes),
-            MIN_VECTOR_SIMILARITY,
-        )
+
+        # Apply threshold filtering only for COSINE metric (others lack a stable default scale)
+        if similarity_metric == SimilarityMetric.COSINE:
+            # Minimum cosine similarity threshold for relevance
+            # 0.3 = loosely related, 0.5 = moderately related, 0.7 = highly related
+            MIN_VECTOR_SIMILARITY = 0.4
+            filtered_derivative_nodes = [
+                node for node, score in zip(valid_derivative_nodes, scores) if score >= MIN_VECTOR_SIMILARITY
+            ]
+            logger.info(
+                "Early filtering (metric=%s): kept %d/%d derivatives with similarity >= %.2f",
+                similarity_metric.value,
+                len(filtered_derivative_nodes),
+                len(valid_derivative_nodes),
+                MIN_VECTOR_SIMILARITY,
+            )
+        else:
+            # For DOT/EUCLIDEAN/MANHATTAN, skip fixed-threshold filtering to avoid mismatched scales
+            filtered_derivative_nodes = valid_derivative_nodes
+            logger.info(
+                "Early filtering skipped for metric=%s to avoid incompatible fixed thresholds",
+                similarity_metric.value,
+            )
         
         if len(filtered_derivative_nodes) == 0:
             logger.info("All derivatives filtered out due to low similarity")

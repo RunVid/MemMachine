@@ -344,7 +344,7 @@ class MemMachine:
         | None = None,  # TODO: Define if limit is per memory or is global limit
         score_threshold: float = -float("inf"),
         search_filter: str | None = None,
-        min_distance: float | None = 0.3,  # Semantic memory similarity threshold
+        min_distance: float | None = None,  # Semantic memory similarity threshold
     ) -> SearchResponse:
         episodic_task: Task | None = None
         semantic_task: Task | None = None

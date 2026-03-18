@@ -76,8 +76,29 @@ class IngestionService:
     async def process_set_ids(self, set_ids: list[SetIdT]) -> None:
         logger.info("Starting ingestion processing for set ids: %s", set_ids)
 
+        # Filter out sets that have no semantic categories configured
+        # This prevents unnecessary processing of session/role sets when only profile memory is enabled
+        valid_set_ids = []
+        for set_id in set_ids:
+            resources = self._resource_retriever.get_resources(set_id)
+            if len(resources.semantic_categories) == 0:
+                isolation_type = _get_isolation_type(set_id)
+                logger.debug(
+                    "Skipping set_id %s (%s) - no semantic categories configured",
+                    set_id,
+                    isolation_type,
+                )
+                continue
+            valid_set_ids.append(set_id)
+        
+        if len(valid_set_ids) == 0:
+            logger.debug("No valid set_ids to process after filtering")
+            return
+
+        logger.info("Processing %d set_ids (filtered from %d)", len(valid_set_ids), len(set_ids))
+        
         results = await asyncio.gather(
-            *[self._process_single_set(set_id) for set_id in set_ids],
+            *[self._process_single_set(set_id) for set_id in valid_set_ids],
             return_exceptions=True,
         )
 
@@ -139,26 +160,11 @@ class IngestionService:
         
         This processes messages in batches of 50 until all are processed,
         then performs consolidation once at the end.
+        
+        Note: This is only called for sets that have semantic categories configured.
         """
         logger.info("Processing semantic ingestion for set_id: %s", set_id)
         resources = self._resource_retriever.get_resources(set_id)
-
-        if len(resources.semantic_categories) == 0:
-            # This is expected for session/role memory when only profile memory is configured
-            isolation_type = _get_isolation_type(set_id)
-            if isolation_type in ["session", "role"]:
-                logger.debug(
-                    "No semantic categories configured for %s set_id %s (expected when only profile memory is enabled).",
-                    isolation_type,
-                    set_id,
-                )
-            else:
-                logger.warning(
-                    "No semantic categories configured for set %s (type: %s), skipping ingestion.",
-                    set_id,
-                    isolation_type,
-                )
-            return
 
         # Process all uningested messages in batches of 50
         total_processed = 0

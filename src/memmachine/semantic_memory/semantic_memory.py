@@ -317,7 +317,7 @@ class SemanticService:
                                 set_id=set_id,
                                 history_ids=message_ids,
                             )
-                            logger.debug(
+                            logger.info(
                                 "Marked %d messages as ingested for set_id %s",
                                 len(message_ids),
                                 set_id,

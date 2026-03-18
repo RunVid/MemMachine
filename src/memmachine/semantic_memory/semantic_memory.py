@@ -288,10 +288,43 @@ class SemanticService:
             # Filter out sets that have no semantic categories configured
             # This prevents processing session/role sets when only profile memory is enabled
             valid_sets = []
+            skipped_sets = []
             for set_id in dirty_sets:
                 resources = self._resource_retriever.get_resources(set_id)
                 if len(resources.semantic_categories) > 0:
                     valid_sets.append(set_id)
+                else:
+                    skipped_sets.append(set_id)
+
+            # Mark skipped sets as ingested so they don't stay perpetually dirty
+            if len(skipped_sets) > 0:
+                logger.debug(
+                    "Marking %d set(s) with no semantic categories as ingested: %s",
+                    len(skipped_sets),
+                    skipped_sets,
+                )
+                for set_id in skipped_sets:
+                    try:
+                        # Get and mark all uningested messages for this set as ingested
+                        messages = await self._semantic_storage.get_history_messages(
+                            set_id=set_id,
+                            limit=1000,  # Process in batches if needed
+                        )
+                        if len(messages) > 0:
+                            await self._semantic_storage.mark_history_messages_ingested(
+                                set_id=set_id,
+                                message_ids=[msg.id for msg in messages],
+                            )
+                            logger.debug(
+                                "Marked %d messages as ingested for set_id %s",
+                                len(messages),
+                                set_id,
+                            )
+                    except Exception:
+                        logger.exception(
+                            "Failed to mark messages as ingested for set_id %s",
+                            set_id,
+                        )
 
             if len(valid_sets) == 0:
                 await asyncio.sleep(self._background_ingestion_interval_sec)

@@ -269,7 +269,17 @@ class SemanticService:
             ),
         )
 
+        loop_count = 0
         while not self._is_shutting_down:
+            # Periodically cleanup expired locks (every 30 loops, ~60 seconds with 2s interval)
+            if loop_count % 30 == 0:
+                try:
+                    await self._semantic_storage.cleanup_expired_ingestion_locks()
+                except Exception:
+                    logger.exception("Failed to cleanup expired ingestion locks")
+            
+            loop_count += 1
+
             dirty_sets = await self._semantic_storage.get_history_set_ids(
                 min_uningested_messages=self._feature_update_message_limit,
                 older_than=datetime.now(tz=UTC) - self._feature_time_limit,
@@ -285,3 +295,4 @@ class SemanticService:
                 if self._debug_fail_loudly:
                     raise
                 logger.exception("background task crashed, restarting")
+

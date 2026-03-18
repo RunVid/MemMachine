@@ -71,6 +71,8 @@ class InMemorySemanticStorage(SemanticStorage):
         self._set_history_map: dict[str, dict[EpisodeIdT, bool]] = {}
         self._history_created_at: dict[tuple[str, EpisodeIdT], datetime] = {}
         self._history_to_sets: dict[EpisodeIdT, dict[str, bool]] = {}
+        # Ingestion lock tracking
+        self._ingestion_locks: dict[SetIdT, tuple[str, datetime]] = {}  # set_id -> (owner_id, expires_at)
         self._next_feature_id = 1
         self._next_history_id = 1
         self._lock = asyncio.Lock()
@@ -88,6 +90,7 @@ class InMemorySemanticStorage(SemanticStorage):
             self._set_history_map.clear()
             self._history_created_at.clear()
             self._history_to_sets.clear()
+            self._ingestion_locks.clear()
             self._next_feature_id = 1
             self._next_history_id = 1
 
@@ -760,3 +763,54 @@ class InMemorySemanticStorage(SemanticStorage):
         if min_distance is None:
             return True
         return similarity >= min_distance
+
+    async def try_acquire_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+        timeout_seconds: int = 300,
+    ) -> bool:
+        """Try to acquire an ingestion lock for the given set_id."""
+        from datetime import timedelta
+
+        async with self._lock:
+            now = _utcnow()
+            
+            # Clean up expired lock for this set_id
+            if set_id in self._ingestion_locks:
+                _, expires_at = self._ingestion_locks[set_id]
+                if expires_at <= now:
+                    del self._ingestion_locks[set_id]
+            
+            # Try to acquire lock
+            if set_id not in self._ingestion_locks:
+                expires_at = now + timedelta(seconds=timeout_seconds)
+                self._ingestion_locks[set_id] = (owner_id, expires_at)
+                return True
+            
+            return False
+
+    async def release_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+    ) -> None:
+        """Release an ingestion lock held by this owner."""
+        async with self._lock:
+            if set_id in self._ingestion_locks:
+                lock_owner, _ = self._ingestion_locks[set_id]
+                if lock_owner == owner_id:
+                    del self._ingestion_locks[set_id]
+
+    async def cleanup_expired_ingestion_locks(self) -> None:
+        """Remove ingestion locks that have expired based on their timeout."""
+        async with self._lock:
+            now = _utcnow()
+            expired_sets = [
+                set_id
+                for set_id, (_, expires_at) in self._ingestion_locks.items()
+                if expires_at <= now
+            ]
+            for set_id in expired_sets:
+                del self._ingestion_locks[set_id]
+

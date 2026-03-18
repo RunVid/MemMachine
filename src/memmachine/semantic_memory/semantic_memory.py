@@ -305,19 +305,21 @@ class SemanticService:
                 )
                 for set_id in skipped_sets:
                     try:
-                        # Get and mark all uningested messages for this set as ingested
-                        messages = await self._semantic_storage.get_history_messages(
-                            set_id=set_id,
+                        # Get all uningested messages for this set
+                        message_ids = await self._semantic_storage.get_history_messages(
+                            set_ids=[set_id],
+                            is_ingested=False,
                             limit=1000,  # Process in batches if needed
                         )
-                        if len(messages) > 0:
-                            await self._semantic_storage.mark_history_messages_ingested(
+                        if len(message_ids) > 0:
+                            # Mark them as ingested
+                            await self._semantic_storage.mark_messages_ingested(
                                 set_id=set_id,
-                                message_ids=[msg.id for msg in messages],
+                                history_ids=message_ids,
                             )
                             logger.debug(
                                 "Marked %d messages as ingested for set_id %s",
-                                len(messages),
+                                len(message_ids),
                                 set_id,
                             )
                     except Exception:

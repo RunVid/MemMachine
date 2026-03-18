@@ -27,7 +27,7 @@ from sqlalchemy import (
     text,
     update,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import (
@@ -847,7 +847,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
 
             # Try to insert a new lock
             # PostgreSQL INSERT ... ON CONFLICT DO NOTHING is atomic
-            insert_stmt = insert(IngestionLock).values(
+            insert_stmt = pg_insert(IngestionLock).values(
                 set_id=set_id,
                 owner_id=owner_id,
                 acquired_at=now,

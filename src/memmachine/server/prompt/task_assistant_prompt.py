@@ -348,6 +348,7 @@ task_assistant_consolidation_prompt = """
        - If you cannot identify which source memories to delete, DO NOT create consolidated_memories
        - Example: If consolidating memory IDs [1,2,3] into a new memory, keep_memories MUST NOT contain [1,2,3]
        - Violation = DATA DUPLICATION = SYSTEM CORRUPTION
+       - You must check this following CONSOLIDATION CONTRACT before returning the output.
     6. Ownership naming is consistent
     7. Output is valid JSON with both arrays present
     

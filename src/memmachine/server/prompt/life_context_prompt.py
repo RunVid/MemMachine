@@ -349,7 +349,7 @@ life_context_consolidation_prompt = """
     **RULE**: consolidated_memories.length > 0  =>  (total_memories - keep_memories.length) >= consolidated_memories.length
     
     **If you cannot determine which memories to consolidate, return empty consolidated_memories array.**
-    
+
     ## FINAL VALIDATION CHECKLIST
     
     Before returning, verify:
@@ -364,6 +364,7 @@ life_context_consolidation_prompt = """
        - If you cannot identify which source memories to delete, DO NOT create consolidated_memories
        - Example: If consolidating memory IDs [1,2,3] into a new memory, keep_memories MUST NOT contain [1,2,3]
        - Violation = DATA DUPLICATION = SYSTEM CORRUPTION
+       - You must check this following CONSOLIDATION CONTRACT before returning the output.
     6. Output is valid JSON with both arrays present
     
     ## REMEMBER

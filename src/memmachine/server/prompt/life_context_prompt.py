@@ -211,20 +211,21 @@ life_context_consolidation_prompt = """
 
     ### Step 1: DELETE First (Highest Priority)
     
-    **Actions/Events - Must DELETE:**
-    - "User started X on [date]", "User decided Y", "User completed Z"
-    - ASK: "Is this a static characteristic or an action?" If ACTION → DELETE
+    **IMPORTANT: DELETE means NOT putting the ID in keep_memories array**
     
-    **Sensitive PII - Must DELETE:**
+    **Actions/Events - Must DELETE (don't put in keep_memories):**
+    - "User started X on [date]", "User decided Y", "User completed Z"
+    - ASK: "Is this a static characteristic or an action?" If ACTION → DELETE (exclude from keep_memories)
+    
+    **Sensitive PII - Must DELETE (don't put in keep_memories):**
     - SSN, passport numbers, driver's license, credit cards
     - Passwords, PINs, medical records, financial records
     
-    **Temporary Information - Must DELETE:**
+    **Temporary Information - Must DELETE (don't put in keep_memories):**
     - Current location, hotel stays, Airbnb addresses
     - Time-bound information, current projects
-    - ASK: "Will this still be true in 6 months?" If NO → DELETE
     
-    **OK to Keep:**
+    **OK to Keep (can put in keep_memories):**
     - Long-term interests, stable lifestyle patterns
     - Personality traits, life goals, core values
     - Stable life circumstances
@@ -232,35 +233,43 @@ life_context_consolidation_prompt = """
 
     ### Step 2: Group and Consolidate
     
-    **Same feature name + same/similar value:**
-    - Exact duplicates → DELETE duplicates, KEEP only one
-    - Similar meaning → DELETE all, CREATE one consolidated version
+    **CRITICAL: Output MUST NOT have duplicate feature names**
     
-    Example:
-    - feature="INTEREST PHOTOGRAPHY", value="User likes photography" / "User enjoys photography"
-    → DELETE both, CREATE: {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "User enjoys photography as a hobby"}
+    **Same feature name + same/similar value:**
+    - Exact duplicates → DELETE duplicates (don't put duplicate IDs in keep_memories), KEEP only one ID
+    - Similar meaning → DELETE all (exclude all IDs from keep_memories), CREATE one consolidated version
+    
+    Example (Exact duplicate):
+    - Input: id='1' feature="INTEREST PHOTOGRAPHY", value="User likes photography" + id='2' same value
+    → keep_memories=['1'], consolidated_memories=[]
+    
+    Example (Similar meaning):
+    - Input: id='1' feature="INTEREST PHOTOGRAPHY", value="User likes photography" + id='2' value="User enjoys photography"
+    → keep_memories=[], consolidated_memories=[{"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "enjoys photography as a hobby"}]
     
     **Same feature name + different value:**
-    - If evolution → DELETE old, KEEP new (most complete/current)
-    - If conflicting → merge into comprehensive value
+    - If evolution → DELETE old (exclude old ID from keep_memories), KEEP new ID or CREATE new
+    - If conflicting → DELETE all (exclude all IDs from keep_memories), CREATE merged comprehensive value
     
     Example (Evolution):
-    - feature="CAREER GOAL", value="become a manager" / "become a senior manager"
-    → DELETE old, KEEP: {"tag": "goals", "feature": "CAREER GOAL", "value": "become a senior manager"}
+    - Input: id='3' feature="CAREER GOAL", value="become a manager" + id='7' value="become a senior manager" (newer)
+    → keep_memories=['7'], consolidated_memories=[]
     
     **Vague feature names → Rename with specifics:**
-    - "PRIMARY INTEREST", "SECONDARY INTEREST" → DELETE, CREATE specific names
+    - "PRIMARY INTEREST", "SECONDARY INTEREST" → DELETE all (exclude from keep_memories), CREATE specific names
     
     Example (Rename vague):
-    - feature="PRIMARY INTEREST", value="photography"
-    - feature="SECONDARY INTEREST", value="cooking"
-    → DELETE both, CREATE:
-      {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "photography"}
-      {"tag": "interests", "feature": "INTEREST COOKING", "value": "cooking"}
+    - Input: id='5' feature="PRIMARY INTEREST", value="photography" + id='8' feature="SECONDARY INTEREST", value="cooking"
+    → keep_memories=[], consolidated_memories=[
+        {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "photography"},
+        {"tag": "interests", "feature": "INTEREST COOKING", "value": "cooking"}
+      ]
     
     **Multiple items of same type:**
     - Use descriptive suffixes with item names
     - Don't create suffixes until you have 2+ distinct items
+    
+    **KEY RULE: When you CREATE consolidated_memories, the source IDs MUST be deleted (NOT in keep_memories)!**
 
     ### Step 3: Handle Related Items
     - Related interests (e.g., "dogs", "cats") → Merge into broader OR keep separate
@@ -334,10 +343,11 @@ life_context_consolidation_prompt = """
     Before returning, verify:
     
     1. All value fields contain ONLY characteristics (no reasoning notes)
-    2. No duplicate feature names under same tag
+    2. **NO duplicate feature names** (CRITICAL! Each feature name must be unique in consolidated_memories)
     3. Feature names are specific, not vague (INTEREST PHOTOGRAPHY not PRIMARY INTEREST)
     4. Suffixes are descriptive when needed
-    5. Output is valid JSON with both arrays present
+    5. **OLD memories properly deleted**: If you created consolidated_memories from existing IDs, those source IDs MUST NOT be in keep_memories
+    6. Output is valid JSON with both arrays present
     
     ## REMEMBER
     

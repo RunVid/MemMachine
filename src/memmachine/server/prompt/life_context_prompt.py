@@ -199,17 +199,7 @@ life_context_consolidation_prompt = """
     
     ## INPUT/OUTPUT FORMAT
     
-    **IMPORTANT: All input memories have the SAME tag. All outputs MUST use this SAME tag.**
-
-    ### Input Memory
-    ```json
-    {"tag": "string", "feature": "string", "value": "string", "metadata": {"id": integer}}
-    ```
-
-    ### Output Memory
-    ```json
-    {"tag": "string", "feature": "string", "value": "string", "metadata": {"citations": [list of ids]}}
-    ```
+    All input memories have the SAME tag. All outputs MUST use this SAME tag.**
 
     ## CONSOLIDATION RULES
 
@@ -248,7 +238,7 @@ life_context_consolidation_prompt = """
     
     Example:
     - feature="INTEREST PHOTOGRAPHY", value="User likes photography" / "User enjoys photography"
-    → DELETE both, CREATE: {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "User enjoys photography as a hobby", "metadata": {"citations": ["1", "2"]}}
+    → DELETE both, CREATE: {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "User enjoys photography as a hobby"}
     
     **Same feature name + different value:**
     - If evolution → DELETE old, KEEP new (most complete/current)
@@ -265,8 +255,8 @@ life_context_consolidation_prompt = """
     - feature="PRIMARY INTEREST", value="photography"
     - feature="SECONDARY INTEREST", value="cooking"
     → DELETE both, CREATE:
-      {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "photography", "metadata": {"citations": ["1"]}}
-      {"tag": "interests", "feature": "INTEREST COOKING", "value": "cooking", "metadata": {"citations": ["2"]}}
+      {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "photography"}
+      {"tag": "interests", "feature": "INTEREST COOKING", "value": "cooking"}
     
     **Multiple items of same type:**
     - Use descriptive suffixes with item names
@@ -299,55 +289,62 @@ life_context_consolidation_prompt = """
     
     **Step 5: Generate output**
     - keep_memories: IDs to keep unchanged
-    - consolidated_memories: New memories with citations
+    - consolidated_memories: New memories
 
     ## OUTPUT FORMAT
 
     Both fields MUST be arrays. NEVER use null.
-
-    ```
-    <think>
-    Step 1: List inputs...
-    Step 2: DELETE candidates...
-    Step 3: Groups...
-    Step 4: Decisions...
-    Step 5: Output...
-    </think>
+    
+    Return ONLY valid JSON:
+    ```json
     {"consolidated_memories": [...], "keep_memories": [...]}
     ```
 
-    **keep_memories**: Array of ID strings (as strings) to keep unchanged. Use [] to delete all.
+    **keep_memories**: Array of ID strings to keep unchanged. Use [] to delete all.
     
     **consolidated_memories**: Array of new memories. Each must include:
-    - tag: same as input
-    - feature: UPPERCASE with SPACES, specific names
-    - value: the actual characteristic
-    - metadata.citations: array of source IDs
+    - tag: same as input (lowercase string)
+    - feature: UPPERCASE with SPACES, specific names (string)
+    - value: ONLY the characteristic itself (string)
+    
+    The value field must contain ONLY the characteristic, never include reasoning or explanations.
 
     ### Output Examples
 
-    Example 1 - Keep one, delete duplicate:
+    Example 1 - Keep one:
     {"consolidated_memories": [], "keep_memories": ["1"]}
 
-    Example 2 - Delete all (temporary data):
+    Example 2 - Delete all:
     {"consolidated_memories": [], "keep_memories": []}
 
-    Example 3 - Merge similar interests:
+    Example 3 - Merge similar:
     {"consolidated_memories": [
-        {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "User enjoys photography as a hobby", "metadata": {"citations": ["1", "2"]}}
+        {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "enjoys photography as a hobby"}
     ], "keep_memories": []}
 
-    Example 4 - Rename vague features:
+    Example 4 - Rename vague to specific:
     {"consolidated_memories": [
-        {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "photography", "metadata": {"citations": ["1"]}},
-        {"tag": "interests", "feature": "INTEREST COOKING", "value": "cooking", "metadata": {"citations": ["2"]}}
+        {"tag": "interests", "feature": "INTEREST PHOTOGRAPHY", "value": "photography"},
+        {"tag": "interests", "feature": "INTEREST COOKING", "value": "cooking"},
+        {"tag": "interests", "feature": "INTEREST HIKING", "value": "hiking"}
     ], "keep_memories": []}
+    
+    ## FINAL VALIDATION CHECKLIST
+    
+    Before returning, verify:
+    
+    1. All value fields contain ONLY characteristics (no reasoning notes)
+    2. No duplicate feature names under same tag
+    3. Feature names are specific, not vague (INTEREST PHOTOGRAPHY not PRIMARY INTEREST)
+    4. Suffixes are descriptive when needed
+    5. Output is valid JSON with both arrays present
     
     ## REMEMBER
     
     - Be aggressive with deletion: More memories = more interference
     - Profile data storage, NOT event logging
-    - Replace vague names ("PRIMARY INTEREST") with specific names ("INTEREST PHOTOGRAPHY")
+    - Use specific feature names, not vague ones
+    - Keep value fields CLEAN - only characteristics
     - Delete ruthlessly when in doubt
 """
 

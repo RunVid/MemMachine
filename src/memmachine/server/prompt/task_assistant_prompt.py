@@ -179,17 +179,7 @@ task_assistant_consolidation_prompt = """
     
     ## INPUT/OUTPUT FORMAT
     
-    **IMPORTANT: All input memories have the SAME tag. All outputs MUST use this SAME tag.**
-
-    ### Input Memory
-    ```json
-    {"tag": "string", "feature": "string", "value": "string", "metadata": {"id": integer}}
-    ```
-
-    ### Output Memory
-    ```json
-    {"tag": "string", "feature": "string", "value": "string", "metadata": {"citations": [list of ids]}}
-    ```
+    All input memories have the SAME tag. All outputs MUST use this SAME tag.**
 
     ## CONSOLIDATION RULES
 
@@ -230,7 +220,7 @@ task_assistant_consolidation_prompt = """
     → DELETE duplicate, KEEP: {"tag": "contacts", "feature": "EMAIL", "value": "user@example.com"}
     
     - feature="FULL NAME", value="John Smith" / "John D. Smith"
-    → DELETE both, CREATE: {"tag": "basics", "feature": "FULL NAME", "value": "John D. Smith", "metadata": {"citations": ["1", "2"]}}
+    → DELETE both, CREATE: {"tag": "basics", "feature": "FULL NAME", "value": "John D. Smith"}
     
     **Same feature name + different value:**
     - If different accounts → DELETE old, CREATE new with suffixes
@@ -239,8 +229,8 @@ task_assistant_consolidation_prompt = """
     Example (Different accounts):
     - feature="EMAIL", value="personal@email.com" / "work@company.com"
     → DELETE both, CREATE:
-      {"tag": "contacts", "feature": "EMAIL PERSONAL", "value": "personal@email.com", "metadata": {"citations": ["1"]}}
-      {"tag": "contacts", "feature": "EMAIL WORK", "value": "work@company.com", "metadata": {"citations": ["2"]}}
+      {"tag": "contacts", "feature": "EMAIL PERSONAL", "value": "personal@email.com"}
+      {"tag": "contacts", "feature": "EMAIL WORK", "value": "work@company.com"}
     
     Example (Evolution):
     - feature="PHONE NUMBER", value="555-1234" (old) / "555-5678" (new)
@@ -277,54 +267,62 @@ task_assistant_consolidation_prompt = """
     
     **Step 5: Generate output**
     - keep_memories: IDs to keep unchanged
-    - consolidated_memories: New memories with citations
+    - consolidated_memories: New memories
 
     ## OUTPUT FORMAT
 
     Both fields MUST be arrays. NEVER use null.
-
-    ```
-    <think>
-    Step 1: List inputs...
-    Step 2: DELETE candidates...
-    Step 3: Groups...
-    Step 4: Decisions...
-    Step 5: Output...
-    </think>
+    
+    Return ONLY valid JSON:
+    ```json
     {"consolidated_memories": [...], "keep_memories": [...]}
     ```
 
-    **keep_memories**: Array of ID strings (as strings) to keep unchanged. Use [] to delete all.
+    **keep_memories**: Array of ID strings to keep unchanged. Use [] to delete all.
     
     **consolidated_memories**: Array of new memories. Each must include:
-    - tag: same as input
-    - feature: UPPERCASE with SPACES
-    - value: the actual data
-    - metadata.citations: array of source IDs
+    - tag: same as input (lowercase string)
+    - feature: UPPERCASE with SPACES (string)
+    - value: ONLY the raw data (string) 
+    
+    The value field must contain ONLY clean data, never include reasoning or explanations.
 
     ### Output Examples
 
-    Example 1 - Keep one, delete duplicate:
+    Example 1 - Keep one:
     {"consolidated_memories": [], "keep_memories": ["1"]}
 
-    Example 2 - Delete all (sensitive data):
+    Example 2 - Delete all:
     {"consolidated_memories": [], "keep_memories": []}
 
-    Example 3 - Merge similar values:
+    Example 3 - Merge:
     {"consolidated_memories": [
-        {"tag": "basics", "feature": "FULL NAME", "value": "John D. Smith", "metadata": {"citations": ["1", "2"]}}
+        {"tag": "basics", "feature": "FULL NAME", "value": "John D. Smith"}
     ], "keep_memories": []}
 
-    Example 4 - Rename for multiple accounts:
+    Example 4 - Multiple accounts with descriptive suffixes:
     {"consolidated_memories": [
-        {"tag": "contacts", "feature": "EMAIL PERSONAL", "value": "personal@email.com", "metadata": {"citations": ["1"]}},
-        {"tag": "contacts", "feature": "EMAIL WORK", "value": "work@company.com", "metadata": {"citations": ["2"]}}
+        {"tag": "contacts", "feature": "EMAIL PERSONAL", "value": "personal@email.com"},
+        {"tag": "contacts", "feature": "EMAIL WORK", "value": "work@company.com"},
+        {"tag": "contacts", "feature": "PHONE NUMBER WORK", "value": "+1 510-987-6035"},
+        {"tag": "contacts", "feature": "PHONE NUMBER HOME", "value": "+86 21 5067 7716"}
     ], "keep_memories": []}
+    
+    ## FINAL VALIDATION CHECKLIST
+    
+    Before returning, verify:
+    
+    1. All value fields contain ONLY raw data (no reasoning notes)
+    2. No duplicate feature names under same tag
+    3. Suffixes are descriptive (WORK, HOME, MOBILE) not vague (SECONDARY, TERTIARY)
+    4. Ownership naming is consistent
+    5. Output is valid JSON with both arrays present
     
     ## REMEMBER
     
     - Be aggressive with deletion: More memories = more interference
     - Profile data storage, NOT event logging
+    - Keep value fields CLEAN - only raw data
     - Delete ruthlessly when in doubt
 """
 

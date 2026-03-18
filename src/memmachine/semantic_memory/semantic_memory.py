@@ -285,14 +285,21 @@ class SemanticService:
                 older_than=datetime.now(tz=UTC) - self._feature_time_limit,
             )
 
-            if len(dirty_sets) == 0:
+            # Filter out sets that have no semantic categories configured
+            # This prevents processing session/role sets when only profile memory is enabled
+            valid_sets = []
+            for set_id in dirty_sets:
+                resources = self._resource_retriever.get_resources(set_id)
+                if len(resources.semantic_categories) > 0:
+                    valid_sets.append(set_id)
+
+            if len(valid_sets) == 0:
                 await asyncio.sleep(self._background_ingestion_interval_sec)
                 continue
 
             try:
-                await ingestion_service.process_set_ids(dirty_sets)
+                await ingestion_service.process_set_ids(valid_sets)
             except Exception:
                 if self._debug_fail_loudly:
                     raise
                 logger.exception("background task crashed, restarting")
-

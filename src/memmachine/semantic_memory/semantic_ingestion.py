@@ -74,31 +74,14 @@ class IngestionService:
         self._owner_id = f"{hostname}-{pid}"
 
     async def process_set_ids(self, set_ids: list[SetIdT]) -> None:
-        logger.info("Starting ingestion processing for set ids: %s", set_ids)
-
-        # Filter out sets that have no semantic categories configured
-        # This prevents unnecessary processing of session/role sets when only profile memory is enabled
-        valid_set_ids = []
-        for set_id in set_ids:
-            resources = self._resource_retriever.get_resources(set_id)
-            if len(resources.semantic_categories) == 0:
-                isolation_type = _get_isolation_type(set_id)
-                logger.debug(
-                    "Skipping set_id %s (%s) - no semantic categories configured",
-                    set_id,
-                    isolation_type,
-                )
-                continue
-            valid_set_ids.append(set_id)
-        
-        if len(valid_set_ids) == 0:
-            logger.debug("No valid set_ids to process after filtering")
+        """Process ingestion for multiple set_ids concurrently."""
+        if len(set_ids) == 0:
             return
-
-        logger.info("Processing %d set_ids (filtered from %d)", len(valid_set_ids), len(set_ids))
+        
+        logger.info("Starting ingestion processing for set ids: %s", set_ids)
         
         results = await asyncio.gather(
-            *[self._process_single_set(set_id) for set_id in valid_set_ids],
+            *[self._process_single_set(set_id) for set_id in set_ids],
             return_exceptions=True,
         )
 

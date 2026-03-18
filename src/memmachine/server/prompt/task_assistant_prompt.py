@@ -126,16 +126,38 @@ task_assistant_description = """
     
     ## HANDLING DUPLICATES AND UPDATES
     
-    Before adding or updating:
+    Before adding new features:
     1. Compare with existing features to check for duplicates
     2. Analyze claims to determine if it's the same or different information
     
     ### Decision Rules
-    - SAME information (same value/meaning): OVERWRITE using UPDATE command
-    - DIFFERENT information (different value/account): Create new feature with different suffix
+    - SAME information (same value/meaning): Do NOT add duplicate - skip it
+    - UPDATED information (same feature, new value): DELETE old, ADD new
+    - DIFFERENT information (different account/value): ADD new with different suffix
     
-    Example: Existing "EMAIL" with "user@example.com", new claim mentions "work email user@work.com"
-    → UPDATE "EMAIL" to "EMAIL PERSONAL", ADD "EMAIL WORK"
+    ### Examples
+    
+    **Example 1: Exact Duplicate (Skip)**
+    - Existing: feature="EMAIL", value="user@example.com"
+    - New claim: "My email is user@example.com"
+    → Skip (exact duplicate)
+    
+    **Example 2: Same Feature, Updated Value (DELETE + ADD)**
+    - Existing: feature="PHONE NUMBER", value="555-1234"
+    - New claim: "My phone number changed to 555-5678"
+    → DELETE "PHONE NUMBER" (old), ADD "PHONE NUMBER" with value="555-5678"
+    
+    **Example 3: Multiple Accounts (ADD new with suffix)**
+    - Existing: feature="EMAIL", value="user@example.com"
+    - New claim: "My work email is user@work.com"
+    → ADD "EMAIL WORK" (user@work.com)
+    
+    **Example 4: Discovering Multiple Accounts (ADD new with suffixes)**
+    - Existing: feature="PHONE NUMBER", value="555-1234"
+    - New claim: "That's my home number. My work number is 555-5678"
+    → ADD "PHONE NUMBER WORK" (555-5678)
+    
+    **REMEMBER: NEVER have two features with the SAME feature name. Update (Delete old + Add new) or Use suffixes to distinguish them.**
     
     ## EXTRACTION PROCESS
     
@@ -145,9 +167,10 @@ task_assistant_description = """
     2. Select the correct tag (DO NOT create new tags)
     3. Use standard feature names
     4. Include ownership prefix if information belongs to someone else (use name if available)
-    5. For duplicates: same info → UPDATE, different info → create with suffix
+    5. For duplicates: same info → skip, updated info → DELETE old + ADD new, different accounts → DELETE + ADD with suffixes
     6. Extract ONLY the factual data value (e.g., "john@example.com"), NOT the action (e.g., "User confirmed email")
     7. For non-sensitive IDs, store fully; for sensitive info, DO NOT store
+    8. **NEVER create two features with the same feature name** - use suffixes to distinguish
     
     Priority: contacts/basics > accounts/identities > preferences > relationships/services
 """
@@ -231,7 +254,7 @@ task_assistant_consolidation_prompt = """
     
     **Same tag + same feature name + different value:**
     - This usually means different accounts or evolution
-    - If different accounts: UPDATE feature names with suffixes
+    - If different accounts: "UPDATE" = DELETE both old + CREATE new with suffixes
     - If evolution: DELETE old, KEEP new
     
     Examples:
@@ -241,7 +264,9 @@ task_assistant_consolidation_prompt = """
                           {"tag": "contacts", "feature": "EMAIL WORK", "value": "work@company.com"}
 
     ### 2. Different Accounts
-    UPDATE feature names with suffixes (e.g., "EMAIL WORK", "EMAIL PERSONAL")
+    "UPDATE" feature names with suffixes = DELETE old + CREATE new with suffixes (e.g., "EMAIL WORK", "EMAIL PERSONAL")
+    
+    **Note: "UPDATE" means DELETE the old feature(s) and CREATE new feature(s) with better names.**
 
     ### 3. Ownership
     Prefer name-based over relationship-based ("ALICE PHONE NUMBER" > "FRIEND PHONE NUMBER")

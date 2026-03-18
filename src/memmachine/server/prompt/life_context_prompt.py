@@ -141,27 +141,39 @@ life_context_description = """
     
     ## HANDLING DUPLICATES AND UPDATES
     
-    Before adding or updating:
+    Before adding new features:
     1. Compare with existing features to check for duplicates
     2. Analyze if it's the same or different information
     
     ### Decision Rules
-    - SAME information (same meaning): OVERWRITE using UPDATE command
-    - DIFFERENT information: Create new feature with descriptive suffix
-    - Avoid creating vague duplicates like multiple "PRIMARY INTEREST" entries
+    - SAME information (same meaning): Do NOT add duplicate - skip it
+    - UPDATED information (evolution of same characteristic): DELETE old, ADD new
+    - DIFFERENT information (different characteristic): ADD new with descriptive suffixes
     
-    Examples:
-    - Existing "INTEREST PHOTOGRAPHY", new claim "User likes photography"
-      → Skip (duplicate)
+    ### Examples
     
-    - Existing "CAREER GOAL": "become a manager", new claim "become a senior manager"
-      → UPDATE "CAREER GOAL" (evolution of same goal)
+    **Example 1: Exact Duplicate (Skip)**
+    - Existing: feature="INTEREST PHOTOGRAPHY", value="User likes photography"
+    - New claim: "I enjoy photography"
+    → Skip (same interest, duplicate)
     
-    - Existing "CAREER GOAL": "become a manager", new claim "start a side business"
-      → Keep "CAREER GOAL" and ADD "CAREER GOAL ENTREPRENEURIAL" (different goals)
+    **Example 2: Evolution of Same Characteristic (DELETE + ADD)**
+    - Existing: feature="CAREER GOAL", value="become a manager"
+    - New claim: "My goal is to become a senior manager"
+    → DELETE "CAREER GOAL" (old), ADD "CAREER GOAL" with value="become a senior manager"
     
-    - Existing "PRIMARY INTEREST": "photography", new claim "User likes cooking"
-      → DELETE "PRIMARY INTEREST", ADD "INTEREST PHOTOGRAPHY" and "INTEREST COOKING" (better naming)
+    **Example 3: Multiple Different Items (ADD with descriptive suffix)**
+    - Existing: feature="PRIMARY INTEREST", value="photography"
+    - New claim: "I also like cooking"
+    → ADD "INTEREST COOKING" (cooking)
+    
+    **Example 4: Discovering Multiple Goals (ADD with descriptive suffix)**
+    - Existing: feature="CAREER GOAL", value="become a manager"
+    - New claim: "I also want to start a side business"
+    → ADD "CAREER GOAL ENTREPRENEURIAL" (start a side business)
+    
+    **REMEMBER: NEVER have two features with the SAME feature name. Update (Delete old + Add new) or Use suffixes to distinguish them.**
+    **REMEMBER: Avoid vague names like "PRIMARY INTEREST" or "SECONDARY INTEREST". Use specific names like "INTEREST PHOTOGRAPHY".**
     
     ## EXTRACTION PROCESS
     
@@ -170,10 +182,11 @@ life_context_description = """
     1. Compare with existing features to identify duplicates or updates
     2. Select the correct tag (DO NOT create new tags)
     3. Use specific, descriptive feature names (avoid vague names like "PRIMARY INTEREST")
-    4. For duplicates: same info → UPDATE, different info → create with descriptive suffix
+    4. For duplicates: same info → skip, evolution → DELETE old + ADD new, different items → DELETE + ADD with descriptive suffixes
     5. Extract the characteristic itself (e.g., "exercises 3 times a week"), NOT the action (e.g., "User started exercising")
     6. Look for underlying motivations, values, and personality traits
     7. Avoid extracting sensitive PII or temporary states
+    8. **NEVER create two features with the same feature name** - use descriptive suffixes to distinguish
     
     Priority: personality/life_situation > goals > lifestyle > interests
 """
@@ -272,19 +285,23 @@ life_context_consolidation_prompt = """
     ### 2. Multiple Items of Same Type
     Use descriptive feature names with the item name as suffix
     
+    **Note: "UPDATE" or "Rename" means DELETE old feature(s) and CREATE new feature(s) with better names.**
+    
     Examples:
     - Multiple "PRIMARY INTEREST" entries → DELETE all, CREATE "INTEREST [NAME]" for each distinct interest
     - Input: "PRIMARY INTEREST": "photography", "SECONDARY INTEREST": "cooking"
-    - Output: "INTEREST PHOTOGRAPHY", "INTEREST COOKING"
+    - Output: DELETE both, CREATE "INTEREST PHOTOGRAPHY" and "INTEREST COOKING"
 
     ### 3. Ownership and Relationships
     When consolidating related interests (e.g., "dogs", "cats", "pets"):
-    - Merge into broader category if appropriate: "INTEREST PETS" with value "User enjoys dogs and cats"
-    - OR keep separate if distinct: "INTEREST DOGS", "INTEREST CATS"
+    - Merge into broader category if appropriate: DELETE specific ones, CREATE "INTEREST PETS" with value "User enjoys dogs and cats"
+    - OR keep separate if distinct: CREATE "INTEREST DOGS" and "INTEREST CATS"
 
     ### 4. Evolution vs Different Items
     - Evolution/refinement: DELETE old, KEEP most complete/current version
-    - Different items: CREATE separate features with descriptive names
+    - Different items: DELETE old vague names, CREATE separate features with descriptive names
+    
+    **Note: Any "UPDATE" operation means DELETE old + CREATE new. There is no direct UPDATE command.**
 
     Example (Evolution): "CAREER GOAL": "become a manager" → "become a senior manager"
     → DELETE old, KEEP "become a senior manager"

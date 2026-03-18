@@ -543,6 +543,45 @@ class IngestionService:
             len(consolidate_resp.consolidated_memories),
         )
 
+        # CRITICAL VALIDATION: If there are consolidated memories, we MUST ensure
+        # that source memories are properly excluded from keep_memories to avoid duplicates
+        if len(consolidate_resp.consolidated_memories) > 0:
+            # Get all memory IDs that exist
+            existing_ids = {m.metadata.id for m in memories if m.metadata.id is not None}
+            kept_ids = set(consolidate_resp.keep_memories)
+            
+            # Calculate how many memories will be deleted
+            num_to_delete = len(existing_ids) - len(kept_ids)
+            num_consolidated = len(consolidate_resp.consolidated_memories)
+            
+            # RULE: If creating N consolidated memories, must delete AT LEAST N source memories
+            if num_to_delete < num_consolidated:
+                logger.error(
+                    "CRITICAL: Consolidation created %d new memories but only %d existing memories "
+                    "will be deleted (kept %d out of %d). This violates the consolidation contract: "
+                    "consolidated_memories.length (%d) > deleted_memories.length (%d). "
+                    "This WILL cause data duplication. Consolidation response is INVALID and will be REJECTED.",
+                    num_consolidated,
+                    num_to_delete,
+                    len(kept_ids),
+                    len(existing_ids),
+                    num_consolidated,
+                    num_to_delete,
+                )
+                # Reject the entire consolidation to prevent data corruption
+                logger.warning(
+                    "Rejecting consolidation for set_id=%s, category=%s, tag=%s. "
+                    "LLM failed to exclude enough source memories from keep_memories. "
+                    "Required: delete >= %d, actual: delete = %d",
+                    set_id,
+                    semantic_category.name,
+                    original_tag,
+                    num_consolidated,
+                    num_to_delete,
+                )
+                # Don't process this consolidation - keep everything as-is
+                return
+
         memories_to_delete = [
             m
             for m in memories

@@ -413,6 +413,10 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         feature_id: FeatureIdT,
         history_ids: list[EpisodeIdT],
     ) -> None:
+        # Skip if no citations to add
+        if not history_ids:
+            return
+        
         try:
             feature_id_int = int(feature_id)
         except (TypeError, ValueError) as e:

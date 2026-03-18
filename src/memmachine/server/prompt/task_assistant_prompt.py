@@ -322,6 +322,18 @@ task_assistant_consolidation_prompt = """
         {"tag": "contacts", "feature": "PHONE NUMBER HOME", "value": "+86 21 5067 7716"}
     ], "keep_memories": []}
     
+    ## CONSOLIDATION CONTRACT (MANDATORY)
+    
+    **IF** you return consolidated_memories with N items:
+    **THEN** you MUST exclude AT LEAST N source memory IDs from keep_memories
+    
+    **WHY**: Consolidated memories are created BY MERGING existing memories. If you keep the source memories 
+    AND add consolidated memories, you create DUPLICATES. This corrupts the system.
+    
+    **RULE**: consolidated_memories.length > 0  =>  (total_memories - keep_memories.length) >= consolidated_memories.length
+    
+    **If you cannot determine which memories to consolidate, return empty consolidated_memories array.**
+
     ## FINAL VALIDATION CHECKLIST
     
     Before returning, verify:
@@ -330,7 +342,12 @@ task_assistant_consolidation_prompt = """
     2. **NO duplicate feature names** (CRITICAL! Each feature name must be unique in consolidated_memories)
     3. Suffixes are descriptive (WORK, HOME, MOBILE, or PERSON NAME) not vague (SECONDARY, TERTIARY, QUATERNARY)
     4. If you see multiple emails/phones without clear account context, use PERSON NAME as suffix
-    5. **OLD memories properly deleted**: If you created consolidated_memories from existing IDs, those source IDs MUST NOT be in keep_memories
+    5. **CRITICAL DATA INTEGRITY CHECK**: 
+       - If consolidated_memories is NOT EMPTY, you MUST have deleted some source memories
+       - Those deleted source memory IDs MUST NOT appear in keep_memories
+       - If you cannot identify which source memories to delete, DO NOT create consolidated_memories
+       - Example: If consolidating memory IDs [1,2,3] into a new memory, keep_memories MUST NOT contain [1,2,3]
+       - Violation = DATA DUPLICATION = SYSTEM CORRUPTION
     6. Ownership naming is consistent
     7. Output is valid JSON with both arrays present
     
@@ -340,6 +357,7 @@ task_assistant_consolidation_prompt = """
     - Profile data storage, NOT event logging
     - Keep value fields CLEAN - only raw data
     - Delete ruthlessly when in doubt
+    - **NEVER consolidate without deleting source memories**
 """
 
 TaskAssistantSemanticCategory = SemanticCategory(

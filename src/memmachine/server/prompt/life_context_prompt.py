@@ -199,7 +199,7 @@ life_context_consolidation_prompt = """
     
     ## INPUT/OUTPUT FORMAT
     
-    All input memories have the SAME tag. All outputs MUST use this SAME tag.**
+    All input memories have the SAME tag. All outputs MUST use this SAME tag.
 
     ## CONSOLIDATION RULES
 

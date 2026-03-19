@@ -290,11 +290,19 @@ class SemanticService:
             valid_sets = []
             skipped_sets = []
             for set_id in dirty_sets:
-                resources = self._resource_retriever.get_resources(set_id)
-                if len(resources.semantic_categories) > 0:
-                    valid_sets.append(set_id)
-                else:
-                    skipped_sets.append(set_id)
+                try:
+                    resources = self._resource_retriever.get_resources(set_id)
+                    if len(resources.semantic_categories) > 0:
+                        valid_sets.append(set_id)
+                    else:
+                        skipped_sets.append(set_id)
+                except Exception:
+                    logger.exception(
+                        "Failed to get resources for set_id %s, skipping",
+                        set_id,
+                    )
+                    # Skip this set - don't add to valid_sets or skipped_sets
+                    continue
 
             # Mark skipped sets as ingested so they don't stay perpetually dirty
             if len(skipped_sets) > 0:

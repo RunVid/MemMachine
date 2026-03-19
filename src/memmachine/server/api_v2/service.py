@@ -12,6 +12,7 @@ from memmachine.common.api import MemoryType as MemoryTypeE
 from memmachine.common.api.spec import (
     AddMemoriesSpec,
     AddMemoryResult,
+    ConsolidateMemoriesResponse,
     Episode,
     EpisodicSearchResult,
     ListMemoriesSpec,
@@ -241,3 +242,54 @@ async def _list_target_memories(
         status=0,
         content=content,
     )
+
+
+async def _consolidate_memories(
+    spec: "ConsolidateMemoriesSpec",
+    memmachine: MemMachine,
+) -> ConsolidateMemoriesResponse:
+    """
+    Trigger consolidation for a specific set_id.
+
+    Args:
+        spec: Consolidation specification with set_id and force flag
+        memmachine: MemMachine instance
+
+    Returns:
+        ConsolidateMemoriesResponse with summary of consolidation results
+    """
+    from memmachine.common.api.spec import ConsolidateMemoriesSpec
+
+    logger.info(
+        "Consolidating memories - set_id: %s, force: %s",
+        spec.set_id,
+        spec.force,
+    )
+
+    lock_acquired, consolidated = await memmachine.trigger_consolidation(
+        set_id=spec.set_id,
+        force=spec.force,
+    )
+
+    # Build response message
+    if not lock_acquired:
+        message = (
+            f"Consolidation skipped for set_id '{spec.set_id}': "
+            "Lock is held by another process. Try again later."
+        )
+    elif not consolidated:
+        message = (
+            f"No consolidation applied for set_id '{spec.set_id}'. "
+            "The set may have insufficient memories to consolidate. "
+            "Try using force=true to bypass threshold checks."
+        )
+    else:
+        message = f"Consolidation complete for set_id '{spec.set_id}'."
+
+    return ConsolidateMemoriesResponse(
+        message=message,
+        set_id=spec.set_id,
+        consolidated=consolidated,
+        lock_acquired=lock_acquired,
+    )
+

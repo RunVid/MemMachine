@@ -178,3 +178,59 @@ class SemanticStorage(ABC):
     ) -> list[SetIdT]:
         """Return all set id's that match the specified filters."""
         raise NotImplementedError
+
+    @abstractmethod
+    async def try_acquire_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+        timeout_seconds: int = 300,
+    ) -> bool:
+        """
+        Try to acquire an ingestion lock for the given set_id.
+        
+        This lock covers the ENTIRE ingestion cycle for a set_id:
+        - Claiming all uningested messages (in batches of 50)
+        - Processing each batch
+        - Consolidation
+        
+        This prevents race conditions when multiple pods try to process
+        the same set_id simultaneously.
+        
+        Args:
+            set_id: The set to lock for ingestion
+            owner_id: Unique identifier for this pod/process (e.g., hostname + PID)
+            timeout_seconds: Lock expires after this many seconds (default 5 minutes)
+            
+        Returns:
+            True if lock was acquired, False if another pod holds the lock
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def release_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+    ) -> None:
+        """
+        Release an ingestion lock held by this owner.
+        
+        Should be called in a finally block to ensure locks are released
+        even if processing fails.
+        
+        Args:
+            set_id: The set to unlock
+            owner_id: The owner that acquired the lock
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def cleanup_expired_ingestion_locks(self) -> None:
+        """
+        Remove ingestion locks that have expired based on their timeout.
+        
+        Prevents deadlocks when a pod crashes while holding a lock.
+        Should be called periodically by the background ingestion task.
+        """
+        raise NotImplementedError

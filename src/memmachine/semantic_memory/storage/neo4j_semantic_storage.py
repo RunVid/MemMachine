@@ -131,6 +131,13 @@ class Neo4jSemanticStorage(SemanticStorage):
             REQUIRE s.set_id IS UNIQUE
             """,
         )
+        await self._driver.execute_query(
+            """
+            CREATE CONSTRAINT ingestion_lock_unique IF NOT EXISTS
+            FOR (l:IngestionLock)
+            REQUIRE l.set_id IS UNIQUE
+            """,
+        )
         await self._backfill_embedding_dimensions()
         await self._load_set_embedding_dimensions()
         await self._ensure_existing_set_labels()
@@ -144,6 +151,7 @@ class Neo4jSemanticStorage(SemanticStorage):
         await self._driver.execute_query("MATCH (f:Feature) DETACH DELETE f")
         await self._driver.execute_query("MATCH (h:SetHistory) DELETE h")
         await self._driver.execute_query("MATCH (s:SetEmbedding) DELETE s")
+        await self._driver.execute_query("MATCH (l:IngestionLock) DELETE l")
         records, _, _ = await self._driver.execute_query(
             """
             SHOW VECTOR INDEXES
@@ -1257,3 +1265,129 @@ class Neo4jSemanticStorage(SemanticStorage):
         ):
             record["embedding_dimensions"] = record["resolved_dimensions"]
         return record
+
+    async def try_acquire_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+        timeout_seconds: int = 300,
+    ) -> bool:
+        """
+        Try to acquire an ingestion lock for the given set_id.
+        
+        Uses Neo4j MERGE with uniqueness constraint to atomically acquire the lock.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(seconds=timeout_seconds)
+        now_ts = now.timestamp()
+        expires_at_ts = expires_at.timestamp()
+
+        # First, try to clean up expired locks for this set_id
+        await self._driver.execute_query(
+            """
+            MATCH (l:IngestionLock {set_id: $set_id})
+            WHERE l.expires_at <= $now_ts
+            DELETE l
+            """,
+            set_id=set_id,
+            now_ts=now_ts,
+        )
+
+        # Try to create a new lock using MERGE
+        # The UNIQUE constraint on set_id ensures only one pod can hold the lock
+        records, _, _ = await self._driver.execute_query(
+            """
+            MERGE (l:IngestionLock {set_id: $set_id})
+            ON CREATE SET 
+                l.owner_id = $owner_id,
+                l.acquired_at = $now_ts,
+                l.expires_at = $expires_at_ts
+            RETURN l.owner_id AS owner_id, l.acquired_at AS acquired_at
+            """,
+            set_id=set_id,
+            owner_id=owner_id,
+            now_ts=now_ts,
+            expires_at_ts=expires_at_ts,
+        )
+
+        if not records:
+            return False
+
+        record = dict(records[0])
+        lock_owner = record.get("owner_id")
+        lock_acquired_at = record.get("acquired_at")
+
+        # Check if we acquired the lock (owner_id matches and acquired_at matches our timestamp)
+        acquired = (
+            lock_owner == owner_id 
+            and lock_acquired_at is not None 
+            and abs(lock_acquired_at - now_ts) < 1.0  # Within 1 second tolerance
+        )
+
+        if acquired:
+            logger.info(
+                "Acquired ingestion lock for set_id=%s, owner=%s",
+                set_id,
+                owner_id,
+            )
+        else:
+            logger.debug(
+                "Failed to acquire ingestion lock for set_id=%s (held by %s)",
+                set_id,
+                lock_owner,
+            )
+
+        return acquired
+
+    async def release_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+    ) -> None:
+        """
+        Release an ingestion lock held by this owner.
+        
+        Only deletes the lock if the owner_id matches.
+        """
+        result, _, _ = await self._driver.execute_query(
+            """
+            MATCH (l:IngestionLock {set_id: $set_id, owner_id: $owner_id})
+            DELETE l
+            RETURN count(l) AS deleted_count
+            """,
+            set_id=set_id,
+            owner_id=owner_id,
+        )
+
+        if result and dict(result[0]).get("deleted_count", 0) > 0:
+            logger.info(
+                "Released ingestion lock for set_id=%s, owner=%s",
+                set_id,
+                owner_id,
+            )
+
+    async def cleanup_expired_ingestion_locks(self) -> None:
+        """Remove ingestion locks that have expired based on their timeout."""
+        from datetime import datetime, timezone
+
+        now_ts = datetime.now(timezone.utc).timestamp()
+
+        result, _, _ = await self._driver.execute_query(
+            """
+            MATCH (l:IngestionLock)
+            WHERE l.expires_at <= $now_ts
+            DELETE l
+            RETURN count(l) AS deleted_count
+            """,
+            now_ts=now_ts,
+        )
+
+        if result:
+            deleted_count = dict(result[0]).get("deleted_count", 0)
+            if deleted_count > 0:
+                logger.info(
+                    "Cleaned up %d expired ingestion locks",
+                    deleted_count,
+                )

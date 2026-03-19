@@ -13,6 +13,8 @@ from memmachine.common.api.doc import RouterDoc
 from memmachine.common.api.spec import (
     AddMemoriesResponse,
     AddMemoriesSpec,
+    ConsolidateMemoriesResponse,
+    ConsolidateMemoriesSpec,
     CreateProjectSpec,
     DeleteEpisodicMemorySpec,
     DeleteProjectSpec,
@@ -43,6 +45,7 @@ from memmachine.common.errors import (
 from memmachine.main.memmachine import ALL_MEMORY_TYPES
 from memmachine.server.api_v2.service import (
     _add_messages_to,
+    _consolidate_memories,
     _list_target_memories,
     _search_target_memories,
     _SessionData,
@@ -374,6 +377,39 @@ async def delete_semantic_memory(
     except Exception as e:
         raise RestError(
             code=500, message="Unable to delete semantic memory", ex=e
+        ) from e
+
+
+@router.post(
+    "/memories/consolidate",
+    description=RouterDoc.CONSOLIDATE_MEMORIES,
+)
+async def consolidate_memories(
+    spec: ConsolidateMemoriesSpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> ConsolidateMemoriesResponse:
+    """
+    Manually trigger memory consolidation.
+
+    Consolidation merges redundant memories and improves memory quality
+    without adding new messages. This is useful for:
+    - Fixing malformed or duplicate memories
+    - Improving memory organization
+    - Reducing memory interference
+    - Cleaning up after schema changes
+
+    By default, consolidation only runs if a memory set has at least
+    10 memories per tag (configurable). Use force=true to bypass this check.
+    """
+    try:
+        return await _consolidate_memories(spec=spec, memmachine=memmachine)
+    except ValueError as e:
+        raise RestError(code=422, message="invalid argument", ex=e) from e
+    except SessionNotFoundError as e:
+        raise RestError(code=404, message="Project does not exist", ex=e) from e
+    except Exception as e:
+        raise RestError(
+            code=500, message="Unable to consolidate memories", ex=e
         ) from e
 
 

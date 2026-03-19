@@ -65,10 +65,21 @@ class IngestionService:
         self._resource_retriever = params.resource_retriever
         self._consolidation_threshold = params.consolidated_threshold
         self._debug_fail_loudly = params.debug_fail_loudly
+        
+        # Generate unique owner ID for this pod/process
+        import os
+        import socket
+        hostname = socket.gethostname()
+        pid = os.getpid()
+        self._owner_id = f"{hostname}-{pid}"
 
     async def process_set_ids(self, set_ids: list[SetIdT]) -> None:
+        """Process ingestion for multiple set_ids concurrently."""
+        if len(set_ids) == 0:
+            return
+        
         logger.info("Starting ingestion processing for set ids: %s", set_ids)
-
+        
         results = await asyncio.gather(
             *[self._process_single_set(set_id) for set_id in set_ids],
             return_exceptions=True,
@@ -79,49 +90,114 @@ class IngestionService:
             raise ExceptionGroup("Failed to process set ids", errors)
 
     async def _process_single_set(self, set_id: str) -> None:  # noqa: C901
+        """
+        Process all uningested messages for a single set_id.
+        
+        This method acquires a lock for the entire ingestion cycle to prevent
+        race conditions when multiple pods try to process the same set_id.
+        """
+        # Try to acquire ingestion lock for this set_id
+        logger.info(
+            "Attempting to acquire ingestion lock for set_id=%s, owner=%s",
+            set_id,
+            self._owner_id,
+        )
+        
+        lock_acquired = await self._semantic_storage.try_acquire_ingestion_lock(
+            set_id=set_id,
+            owner_id=self._owner_id,
+            timeout_seconds=300,  # 5 minutes timeout
+        )
+        
+        if not lock_acquired:
+            logger.info(
+                "SKIPPED set_id=%s - lock held by another pod, owner=%s will not process",
+                set_id,
+                self._owner_id,
+            )
+            return
+        
+        logger.info(
+            "ACQUIRED lock for set_id=%s, owner=%s - starting ingestion",
+            set_id,
+            self._owner_id,
+        )
+        
+        try:
+            await self._process_single_set_with_lock(set_id)
+        finally:
+            # Always release the lock, even if processing fails
+            await self._semantic_storage.release_ingestion_lock(
+                set_id=set_id,
+                owner_id=self._owner_id,
+            )
+            logger.info(
+                "RELEASED lock for set_id=%s, owner=%s - ingestion complete",
+                set_id,
+                self._owner_id,
+            )
+    
+    async def _process_single_set_with_lock(self, set_id: str) -> None:  # noqa: C901
+        """
+        Process all uningested messages for a set_id (called after lock is acquired).
+        
+        This processes messages in batches of 50 until all are processed,
+        then performs consolidation once at the end.
+        
+        Note: This is only called for sets that have semantic categories configured.
+        """
         logger.info("Processing semantic ingestion for set_id: %s", set_id)
         resources = self._resource_retriever.get_resources(set_id)
 
-        # Atomically claim messages - this prevents multiple pods from processing the same messages
-        # Messages are automatically marked as ingested when claimed
-        history_ids = await self._semantic_storage.get_history_messages(
-            set_ids=[set_id],
-            limit=50,
-            is_ingested=False,
-        )
-
-        logger.info(
-            "Found %d uningested messages for set_id %s, "
-            "semantic_categories count: %d",
-            len(history_ids),
-            set_id,
-            len(resources.semantic_categories),
-        )
-
-        if len(resources.semantic_categories) == 0:
-            # This is expected for session/role memory when only profile memory is configured
-            isolation_type = _get_isolation_type(set_id)
-            if isolation_type in ["session", "role"]:
-                logger.debug(
-                    "No semantic categories configured for %s set_id %s (expected when only profile memory is enabled). "
-                    "Messages are already marked as ingested.",
-                    isolation_type,
+        # Process all uningested messages in batches of 50
+        total_processed = 0
+        while True:
+            # Atomically claim next batch of messages
+            history_ids = await self._semantic_storage.get_history_messages(
+                set_ids=[set_id],
+                limit=50,
+                is_ingested=False,
+            )
+            
+            if len(history_ids) == 0:
+                logger.info(
+                    "Finished processing %d total messages for set_id %s",
+                    total_processed,
                     set_id,
                 )
-            else:
-                logger.warning(
-                    "No semantic categories configured for set %s (type: %s), skipping ingestion. "
-                    "Messages are already marked as ingested.",
-                    set_id,
-                    isolation_type,
-                )
-            # Messages are already marked as ingested by get_history_messages()
-            return
-
-        if len(history_ids) == 0:
-            logger.debug("No uningested messages for set_id %s, skipping", set_id)
-            return
-
+                break
+            
+            logger.info(
+                "Processing batch of %d messages for set_id %s (total so far: %d)",
+                len(history_ids),
+                set_id,
+                total_processed,
+            )
+            
+            # Process this batch
+            await self._process_message_batch(
+                set_id=set_id,
+                history_ids=history_ids,
+                resources=resources,
+            )
+            
+            total_processed += len(history_ids)
+        
+        # After processing all messages, consolidate once
+        if total_processed > 0:
+            logger.debug("Starting consolidation for set_id %s", set_id)
+            await self._consolidate_set_memories_if_applicable(
+                set_id=set_id,
+                resources=resources,
+            )
+    
+    async def _process_message_batch(
+        self,
+        set_id: str,
+        history_ids: list[EpisodeIdT],
+        resources: InstanceOf[Resources],
+    ) -> None:
+        """Process a batch of messages for a set_id."""
         raw_messages = await asyncio.gather(
             *[self._history_store.get_episode(h_id) for h_id in history_ids],
         )
@@ -310,7 +386,7 @@ class IngestionService:
         await asyncio.gather(*semantic_category_runners)
 
         logger.info(
-            "Finished processing %d messages out of %d for set %s",
+            "Finished processing %d messages out of %d for batch in set %s",
             len(mark_messages),
             len(messages),
             set_id,
@@ -328,12 +404,7 @@ class IngestionService:
 
         # Note: Messages are already marked as ingested atomically when claimed
         # via get_history_messages(). No need to mark them again here.
-
-        logger.debug("Starting consolidation for set_id %s", set_id)
-        await self._consolidate_set_memories_if_applicable(
-            set_id=set_id,
-            resources=resources,
-        )
+        # Consolidation will be performed once after all batches are processed.
 
     async def _apply_commands(
         self,
@@ -471,6 +542,45 @@ class IngestionService:
             consolidate_resp.keep_memories,
             len(consolidate_resp.consolidated_memories),
         )
+
+        # CRITICAL VALIDATION: If there are consolidated memories, we MUST ensure
+        # that source memories are properly excluded from keep_memories to avoid duplicates
+        if len(consolidate_resp.consolidated_memories) > 0:
+            # Get all memory IDs that exist
+            existing_ids = {m.metadata.id for m in memories if m.metadata.id is not None}
+            kept_ids = set(consolidate_resp.keep_memories)
+            
+            # Calculate how many memories will be deleted
+            num_to_delete = len(existing_ids) - len(kept_ids)
+            num_consolidated = len(consolidate_resp.consolidated_memories)
+            
+            # RULE: If creating N consolidated memories, must delete AT LEAST N source memories
+            if num_to_delete < num_consolidated:
+                logger.error(
+                    "CRITICAL: Consolidation created %d new memories but only %d existing memories "
+                    "will be deleted (kept %d out of %d). This violates the consolidation contract: "
+                    "consolidated_memories.length (%d) > deleted_memories.length (%d). "
+                    "This WILL cause data duplication. Consolidation response is INVALID and will be REJECTED.",
+                    num_consolidated,
+                    num_to_delete,
+                    len(kept_ids),
+                    len(existing_ids),
+                    num_consolidated,
+                    num_to_delete,
+                )
+                # Reject the entire consolidation to prevent data corruption
+                logger.warning(
+                    "Rejecting consolidation for set_id=%s, category=%s, tag=%s. "
+                    "LLM failed to exclude enough source memories from keep_memories. "
+                    "Required: delete >= %d, actual: delete = %d",
+                    set_id,
+                    semantic_category.name,
+                    original_tag,
+                    num_consolidated,
+                    num_to_delete,
+                )
+                # Don't process this consolidation - keep everything as-is
+                return
 
         memories_to_delete = [
             m

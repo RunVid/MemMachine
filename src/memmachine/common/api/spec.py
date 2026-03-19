@@ -436,6 +436,67 @@ class DeleteProjectSpec(BaseModel):
     ]
 
 
+class ConsolidateMemoriesSpec(BaseModel):
+    """
+    Specification model for triggering memory consolidation.
+
+    This model defines the parameters for manually triggering consolidation
+    to fix or improve existing memories without adding new messages.
+    Consolidation merges redundant memories and improves memory quality.
+    """
+
+    set_id: Annotated[
+        str,
+        Field(
+            description="The set ID to consolidate (e.g., 'mem_user_xxx', 'mem_role_xxx', 'mem_session_xxx'). "
+            "This identifies which memory set to consolidate.",
+            examples=["mem_user_project123", "mem_user_alice", "mem_role_assistant"],
+        ),
+    ]
+    force: Annotated[
+        bool,
+        Field(
+            default=False,
+            description="If True, bypasses consolidation threshold checks and forces consolidation "
+            "even if there are fewer memories than the configured threshold (default: 10 per tag).",
+        ),
+    ]
+
+
+class ConsolidateMemoriesResponse(BaseModel):
+    """
+    Response model returned after consolidation operations.
+
+    Contains summary information about the consolidation process.
+    """
+
+    message: Annotated[
+        str,
+        Field(
+            description="Human-readable message describing the consolidation result.",
+        ),
+    ]
+    set_id: Annotated[
+        str,
+        Field(
+            description="The set ID that was consolidated.",
+        ),
+    ]
+    consolidated: Annotated[
+        bool,
+        Field(
+            description="True if consolidation was applied, False if skipped (e.g., insufficient memories).",
+        ),
+    ]
+    lock_acquired: Annotated[
+        bool,
+        Field(
+            description="True if the lock was acquired and processing attempted. "
+            "False if another process is already consolidating this set.",
+        ),
+    ]
+
+
 # Type alias for timestamp input
 TimestampInput = datetime | int | float | str | None
 

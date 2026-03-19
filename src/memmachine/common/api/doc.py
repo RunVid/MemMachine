@@ -445,6 +445,54 @@ class RouterDoc:
     is returned for those entries.
     """
 
+    CONSOLIDATE_MEMORIES = """
+    Manually trigger memory consolidation.
+
+    Consolidation is a process that merges redundant memories, removes duplicates,
+    and improves memory organization. This helps reduce memory interference and
+    improve retrieval quality. Normally, consolidation runs automatically after
+    processing new messages, but this endpoint allows manual triggering for:
+
+    - Fixing malformed or duplicate memories
+    - Improving memory organization after bulk imports  
+    - Cleaning up memories after schema or configuration changes
+    - Reducing memory count when thresholds are reached
+
+    **Asynchronous Processing:**
+    This endpoint returns immediately after acquiring the lock. Consolidation runs
+    in the background and may take several seconds to minutes depending on the
+    number of memories. The lock is automatically released when processing completes.
+
+    **Parameters:**
+    - `set_id`: The memory set identifier to consolidate (required)
+      - Format: `mem_user_<id>` for user/profile memories
+      - Format: `mem_role_<id>` for role memories
+      - Format: `mem_session_<id>` for session memories
+      - Example: `mem_user_user_760653034186354688`
+    - `force`: Set to `true` to bypass consolidation threshold checks (default: `false`)
+
+    **Lock Acquisition:**
+    This endpoint acquires a distributed lock before processing to prevent race
+    conditions. If another process is already consolidating the same set_id,
+    the request will return immediately with `lock_acquired: false`. The lock
+    expires after 5 minutes to prevent deadlocks if a process crashes.
+
+    **Consolidation Threshold:**
+    By default, consolidation only runs when a memory set has at least 10 memories
+    per tag (configurable in server settings). This prevents unnecessary processing
+    of small memory sets. Use `force=true` to consolidate regardless of memory count.
+
+    **Response:**
+    Returns immediately after attempting to acquire the lock:
+    - `lock_acquired: true, consolidated: true` - Lock acquired, processing started in background
+    - `lock_acquired: false, consolidated: false` - Another process holds the lock
+
+    **Example Use Cases:**
+    - After importing historical data: `force=true` to organize all memories
+    - Regular maintenance: Let threshold determine when consolidation is needed
+    - Fixing specific user's memories: Use `set_id=mem_user_<user_id>`
+    """
+
     METRICS_PROMETHEUS = """
     Expose Prometheus metrics."""
 

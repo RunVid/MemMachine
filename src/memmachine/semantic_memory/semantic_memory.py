@@ -269,18 +269,79 @@ class SemanticService:
             ),
         )
 
+        loop_count = 0
         while not self._is_shutting_down:
+            # Periodically cleanup expired locks (every 30 loops, ~60 seconds with 2s interval)
+            if loop_count % 30 == 0:
+                try:
+                    await self._semantic_storage.cleanup_expired_ingestion_locks()
+                except Exception:
+                    logger.exception("Failed to cleanup expired ingestion locks")
+            
+            loop_count += 1
+
             dirty_sets = await self._semantic_storage.get_history_set_ids(
                 min_uningested_messages=self._feature_update_message_limit,
                 older_than=datetime.now(tz=UTC) - self._feature_time_limit,
             )
 
-            if len(dirty_sets) == 0:
+            # Filter out sets that have no semantic categories configured
+            # This prevents processing session/role sets when only profile memory is enabled
+            valid_sets = []
+            skipped_sets = []
+            for set_id in dirty_sets:
+                try:
+                    resources = self._resource_retriever.get_resources(set_id)
+                    if len(resources.semantic_categories) > 0:
+                        valid_sets.append(set_id)
+                    else:
+                        skipped_sets.append(set_id)
+                except Exception:
+                    logger.exception(
+                        "Failed to get resources for set_id %s, skipping",
+                        set_id,
+                    )
+                    # Skip this set - don't add to valid_sets or skipped_sets
+                    continue
+
+            # Mark skipped sets as ingested so they don't stay perpetually dirty
+            if len(skipped_sets) > 0:
+                logger.debug(
+                    "Marking %d set(s) with no semantic categories as ingested: %s",
+                    len(skipped_sets),
+                    skipped_sets,
+                )
+                for set_id in skipped_sets:
+                    try:
+                        # Get all uningested messages for this set
+                        message_ids = await self._semantic_storage.get_history_messages(
+                            set_ids=[set_id],
+                            is_ingested=False,
+                            limit=1000,  # Process in batches if needed
+                        )
+                        if len(message_ids) > 0:
+                            # Mark them as ingested
+                            await self._semantic_storage.mark_messages_ingested(
+                                set_id=set_id,
+                                history_ids=message_ids,
+                            )
+                            logger.info(
+                                "Marked %d messages as ingested for set_id %s",
+                                len(message_ids),
+                                set_id,
+                            )
+                    except Exception:
+                        logger.exception(
+                            "Failed to mark messages as ingested for set_id %s",
+                            set_id,
+                        )
+
+            if len(valid_sets) == 0:
                 await asyncio.sleep(self._background_ingestion_interval_sec)
                 continue
 
             try:
-                await ingestion_service.process_set_ids(dirty_sets)
+                await ingestion_service.process_set_ids(valid_sets)
             except Exception:
                 if self._debug_fail_loudly:
                     raise

@@ -27,7 +27,7 @@ from sqlalchemy import (
     text,
     update,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import (
@@ -168,6 +168,23 @@ class SetIngestedHistory(BaseSemanticStorage):
         server_default=func.now(),
     )
     ingested = mapped_column(Boolean, default=False, nullable=False)
+
+
+class IngestionLock(BaseSemanticStorage):
+    """Tracks ingestion locks to prevent race conditions across pods."""
+
+    __tablename__ = "ingestion_lock"
+    set_id = mapped_column(String, primary_key=True)
+    owner_id = mapped_column(String, nullable=False)
+    acquired_at = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    expires_at = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
 
 
 async def apply_alembic_migrations(engine: AsyncEngine) -> None:
@@ -396,6 +413,10 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         feature_id: FeatureIdT,
         history_ids: list[EpisodeIdT],
     ) -> None:
+        # Skip if no citations to add
+        if not history_ids:
+            return
+        
         try:
             feature_id_int = int(feature_id)
         except (TypeError, ValueError) as e:
@@ -406,7 +427,10 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             for hid in history_ids
         ]
 
-        stmt = insert(citation_association_table).values(rows)
+        # Use INSERT ... ON CONFLICT DO NOTHING to handle duplicate citations gracefully
+        # This can happen during consolidation when citations are being merged
+        stmt = pg_insert(citation_association_table).values(rows)
+        stmt = stmt.on_conflict_do_nothing()
 
         async with self._create_session() as session:
             await session.execute(stmt)
@@ -800,3 +824,110 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             set_ids = result.scalars().all()
 
         return TypeAdapter(list[SetIdT]).validate_python(set_ids)
+
+    async def try_acquire_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+        timeout_seconds: int = 300,
+    ) -> bool:
+        """
+        Try to acquire an ingestion lock for the given set_id.
+        
+        Uses INSERT ... ON CONFLICT DO NOTHING to atomically try to acquire the lock.
+        This prevents race conditions where multiple pods try to process the same set_id.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(seconds=timeout_seconds)
+
+        async with self._create_session() as session:
+            # First, try to clean up expired locks for this set_id
+            delete_stmt = delete(IngestionLock).where(
+                and_(
+                    IngestionLock.set_id == set_id,
+                    IngestionLock.expires_at <= now,
+                )
+            )
+            await session.execute(delete_stmt)
+
+            # Try to insert a new lock
+            # PostgreSQL INSERT ... ON CONFLICT DO NOTHING is atomic
+            insert_stmt = pg_insert(IngestionLock).values(
+                set_id=set_id,
+                owner_id=owner_id,
+                acquired_at=now,
+                expires_at=expires_at,
+            )
+            
+            # Use ON CONFLICT DO NOTHING - if lock exists, it will silently fail
+            insert_stmt = insert_stmt.on_conflict_do_nothing(index_elements=["set_id"])
+            
+            result = await session.execute(insert_stmt)
+            await session.commit()
+            
+            # If rowcount is 1, we successfully acquired the lock
+            # If rowcount is 0, another pod already holds the lock
+            acquired = result.rowcount == 1
+            
+            if acquired:
+                logger.info(
+                    "Acquired ingestion lock for set_id=%s, owner=%s",
+                    set_id,
+                    owner_id,
+                )
+            else:
+                logger.debug(
+                    "Failed to acquire ingestion lock for set_id=%s (another pod holds it)",
+                    set_id,
+                )
+            
+            return acquired
+
+    async def release_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+    ) -> None:
+        """
+        Release an ingestion lock held by this owner.
+        
+        Only deletes the lock if the owner_id matches to prevent
+        accidentally releasing another pod's lock.
+        """
+        async with self._create_session() as session:
+            delete_stmt = delete(IngestionLock).where(
+                and_(
+                    IngestionLock.set_id == set_id,
+                    IngestionLock.owner_id == owner_id,
+                )
+            )
+            result = await session.execute(delete_stmt)
+            await session.commit()
+            
+            if result.rowcount > 0:
+                logger.info(
+                    "Released ingestion lock for set_id=%s, owner=%s",
+                    set_id,
+                    owner_id,
+                )
+
+    async def cleanup_expired_ingestion_locks(self) -> None:
+        """Remove ingestion locks that have expired based on their timeout."""
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+
+        async with self._create_session() as session:
+            delete_stmt = delete(IngestionLock).where(
+                IngestionLock.expires_at <= now
+            )
+            result = await session.execute(delete_stmt)
+            await session.commit()
+            
+            if result.rowcount > 0:
+                logger.info(
+                    "Cleaned up %d expired ingestion locks",
+                    result.rowcount,
+                )

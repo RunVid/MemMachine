@@ -179,17 +179,7 @@ task_assistant_consolidation_prompt = """
     
     ## INPUT/OUTPUT FORMAT
     
-    **IMPORTANT: All input memories have the SAME tag. All outputs MUST use this SAME tag.**
-
-    ### Input Memory
-    ```json
-    {"tag": "string", "feature": "string", "value": "string", "metadata": {"id": integer}}
-    ```
-
-    ### Output Memory
-    ```json
-    {"tag": "string", "feature": "string", "value": "string", "metadata": {"citations": [list of ids]}}
-    ```
+    All input memories have the SAME tag. All outputs MUST use this SAME tag.
 
     ## CONSOLIDATION RULES
 
@@ -200,20 +190,21 @@ task_assistant_consolidation_prompt = """
 
     ### Step 1: DELETE First (Highest Priority)
     
-    **Actions/Events - Must DELETE:**
-    - "User confirmed X on [date]", "User verified Y", "User updated Z"
-    - ASK: "Is this a static data value or an action?" If ACTION → DELETE
+    **IMPORTANT: DELETE means NOT putting the ID in keep_memories array**
     
-    **Sensitive PII - Must DELETE:**
+    **Actions/Events - Must DELETE (don't put in keep_memories):**
+    - "User confirmed X on [date]", "User verified Y", "User updated Z"
+    - ASK: "Is this a static data value or an action?" If ACTION → DELETE (exclude from keep_memories)
+    
+    **Sensitive PII - Must DELETE (don't put in keep_memories):**
     - SSN, passport numbers, driver's license, credit cards, bank accounts
     - Passwords, PINs, medical records, financial records
     
-    **Temporary Information - Must DELETE:**
+    **Temporary Information - Must DELETE (don't put in keep_memories):**
     - Current location, Airbnb/hotel addresses, vacation rentals
     - Travel itineraries, time-bound information
-    - ASK: "Will this still be true in 6 months?" If NO → DELETE
     
-    **OK to Keep:**
+    **OK to Keep (can put in keep_memories):**
     - Contact info: names, emails, phones, general addresses (no unit numbers)
     - Non-sensitive IDs: employee ID, student ID, member ID, customer ID
     - Long-term preferences, birthdate, occupation
@@ -221,34 +212,47 @@ task_assistant_consolidation_prompt = """
 
     ### Step 2: Group and Consolidate
     
+    **CRITICAL: Output MUST NOT have duplicate feature names**
+    
     **Same feature name + same/similar value:**
-    - Exact duplicates → DELETE duplicates, KEEP only one
-    - Nearly identical → DELETE all, CREATE one consolidated version
+    - Exact duplicates → DELETE duplicates (don't put duplicate IDs in keep_memories), KEEP only one ID
+    - Nearly identical → DELETE all (exclude all IDs from keep_memories), CREATE one consolidated version
     
-    Example:
-    - feature="EMAIL", value="user@example.com" (appears twice)
-    → DELETE duplicate, KEEP: {"tag": "contacts", "feature": "EMAIL", "value": "user@example.com"}
+    Example (Exact duplicate):
+    - Input: id='1' feature="EMAIL", value="user@example.com" + id='2' same value
+    → keep_memories=['1'], consolidated_memories=[]
     
-    - feature="FULL NAME", value="John Smith" / "John D. Smith"
-    → DELETE both, CREATE: {"tag": "basics", "feature": "FULL NAME", "value": "John D. Smith", "metadata": {"citations": ["1", "2"]}}
+    Example (Nearly identical):
+    - Input: id='1' feature="FULL NAME", value="John Smith" + id='2' value="John D. Smith"
+    → keep_memories=[], consolidated_memories=[{"tag": "basics", "feature": "FULL NAME", "value": "John D. Smith"}]
     
     **Same feature name + different value:**
-    - If different accounts → DELETE old, CREATE new with suffixes
-    - If evolution → DELETE old, KEEP new (most complete/current)
+    - If different accounts/people → DELETE all (exclude IDs from keep_memories), CREATE new with DESCRIPTIVE suffixes
+    - If evolution/update → DELETE old (exclude old ID from keep_memories), KEEP new ID or CREATE new
     
     Example (Different accounts):
-    - feature="EMAIL", value="personal@email.com" / "work@company.com"
-    → DELETE both, CREATE:
-      {"tag": "contacts", "feature": "EMAIL PERSONAL", "value": "personal@email.com", "metadata": {"citations": ["1"]}}
-      {"tag": "contacts", "feature": "EMAIL WORK", "value": "work@company.com", "metadata": {"citations": ["2"]}}
+    - Input: id='3' feature="EMAIL", value="personal@email.com" + id='4' value="work@company.com"
+    → keep_memories=[], consolidated_memories=[
+        {"tag": "contacts", "feature": "EMAIL PERSONAL", "value": "personal@email.com"},
+        {"tag": "contacts", "feature": "EMAIL WORK", "value": "work@company.com"}
+      ]
     
-    Example (Evolution):
-    - feature="PHONE NUMBER", value="555-1234" (old) / "555-5678" (new)
-    → DELETE old, KEEP: {"tag": "contacts", "feature": "PHONE NUMBER", "value": "555-5678"}
+    Example (Different people):
+    - Input: id='5' feature="EMAIL", value="mike@example.com" + id='8' value="raj88biswas@gmail.com"
+    → keep_memories=[], consolidated_memories=[
+        {"tag": "contacts", "feature": "EMAIL MIKE", "value": "mike@example.com"},
+        {"tag": "contacts", "feature": "EMAIL RAJ", "value": "raj88biswas@gmail.com"}
+      ]
     
-    **Multiple Accounts:**
-    - Don't create suffixes until you have 2+ distinct accounts
-    - Use consistent suffixes: WORK, PERSONAL, HOME
+    Example (Update/Evolution):
+    - Input: id='6' feature="PHONE NUMBER", value="555-1234" (old) + id='9' value="555-5678" (newer)
+    → keep_memories=['9'], consolidated_memories=[]
+    
+    **Suffix Rules:**
+    - For user's accounts: WORK, PERSONAL, HOME, MOBILE
+    - For other people: Use person's NAME (ALICE, MIKE, DR SMITH)
+    - For companies: Use company name (DELTA AIRLINES, GRAND HYATT)
+    - NEVER use: PRIMARY, SECONDARY, TERTIARY, QUATERNARY (too vague!)
 
     ### Step 3: Apply Ownership Rules
     - Prefer name-based over relationship-based
@@ -267,65 +271,94 @@ task_assistant_consolidation_prompt = """
     Example: "DELETE id=3 (action: 'User confirmed email')"
     
     **Step 3: Group remaining by feature name**
-    Group memories with same feature name
+    Group memories with same/similar feature name
     Example: "Group EMAIL: id=1 (personal@email.com), id=2 (work@company.com)"
     
     **Step 4: Decide action per group**
-    - Same values → keep one or merge
-    - Different values → check if accounts or evolution
+    - Same meaning → keep one or merge
+    - Different values → check if it's different accounts or evolution
     - Apply feature name rules (suffixes, ownership)
     
     **Step 5: Generate output**
     - keep_memories: IDs to keep unchanged
-    - consolidated_memories: New memories with citations
+    - consolidated_memories: New memories
 
     ## OUTPUT FORMAT
 
     Both fields MUST be arrays. NEVER use null.
-
-    ```
-    <think>
-    Step 1: List inputs...
-    Step 2: DELETE candidates...
-    Step 3: Groups...
-    Step 4: Decisions...
-    Step 5: Output...
-    </think>
+    
+    Return ONLY valid JSON:
+    ```json
     {"consolidated_memories": [...], "keep_memories": [...]}
     ```
 
-    **keep_memories**: Array of ID strings (as strings) to keep unchanged. Use [] to delete all.
+    **keep_memories**: Array of ID strings to keep unchanged. Use [] to delete all.
     
     **consolidated_memories**: Array of new memories. Each must include:
-    - tag: same as input
-    - feature: UPPERCASE with SPACES
-    - value: the actual data
-    - metadata.citations: array of source IDs
+    - tag: same as input (lowercase string)
+    - feature: UPPERCASE with SPACES (string)
+    - value: ONLY the raw data (string) 
+    
+    The value field must contain ONLY clean data, never include reasoning or explanations.
 
     ### Output Examples
 
-    Example 1 - Keep one, delete duplicate:
+    Example 1 - Keep one:
     {"consolidated_memories": [], "keep_memories": ["1"]}
 
-    Example 2 - Delete all (sensitive data):
+    Example 2 - Delete all:
     {"consolidated_memories": [], "keep_memories": []}
 
-    Example 3 - Merge similar values:
+    Example 3 - Merge:
     {"consolidated_memories": [
-        {"tag": "basics", "feature": "FULL NAME", "value": "John D. Smith", "metadata": {"citations": ["1", "2"]}}
+        {"tag": "basics", "feature": "FULL NAME", "value": "John D. Smith"}
     ], "keep_memories": []}
 
-    Example 4 - Rename for multiple accounts:
+    Example 4 - Multiple accounts with descriptive suffixes:
     {"consolidated_memories": [
-        {"tag": "contacts", "feature": "EMAIL PERSONAL", "value": "personal@email.com", "metadata": {"citations": ["1"]}},
-        {"tag": "contacts", "feature": "EMAIL WORK", "value": "work@company.com", "metadata": {"citations": ["2"]}}
+        {"tag": "contacts", "feature": "EMAIL PERSONAL", "value": "personal@email.com"},
+        {"tag": "contacts", "feature": "EMAIL WORK", "value": "work@company.com"},
+        {"tag": "contacts", "feature": "PHONE NUMBER WORK", "value": "+1 510-987-6035"},
+        {"tag": "contacts", "feature": "PHONE NUMBER HOME", "value": "+86 21 5067 7716"}
     ], "keep_memories": []}
+    
+    ## CONSOLIDATION CONTRACT (MANDATORY)
+    
+    **IF** you return consolidated_memories with N items:
+    **THEN** you MUST exclude AT LEAST N source memory IDs from keep_memories
+    
+    **WHY**: Consolidated memories are created BY MERGING existing memories. If you keep the source memories 
+    AND add consolidated memories, you create DUPLICATES. This corrupts the system.
+    
+    **RULE**: consolidated_memories.length > 0  =>  (total_memories - keep_memories.length) >= consolidated_memories.length
+    
+    **If you cannot determine which memories to consolidate, return empty consolidated_memories array.**
+
+    ## FINAL VALIDATION CHECKLIST
+    
+    Before returning, verify:
+    
+    1. All value fields contain ONLY raw data (no reasoning notes)
+    2. **NO duplicate feature names** (CRITICAL! Each feature name must be unique in consolidated_memories)
+    3. Suffixes are descriptive (WORK, HOME, MOBILE, or PERSON NAME) not vague (SECONDARY, TERTIARY, QUATERNARY)
+    4. If you see multiple emails/phones without clear account context, use PERSON NAME as suffix
+    5. **CRITICAL DATA INTEGRITY CHECK**: 
+       - If consolidated_memories is NOT EMPTY, you MUST have deleted some source memories
+       - Those deleted source memory IDs MUST NOT appear in keep_memories
+       - If you cannot identify which source memories to delete, DO NOT create consolidated_memories
+       - Example: If consolidating memory IDs [1,2,3] into a new memory, keep_memories MUST NOT contain [1,2,3]
+       - Violation = DATA DUPLICATION = SYSTEM CORRUPTION
+       - You must check this following CONSOLIDATION CONTRACT before returning the output.
+    6. Ownership naming is consistent
+    7. Output is valid JSON with both arrays present
     
     ## REMEMBER
     
     - Be aggressive with deletion: More memories = more interference
     - Profile data storage, NOT event logging
+    - Keep value fields CLEAN - only raw data
     - Delete ruthlessly when in doubt
+    - **NEVER consolidate without deleting source memories**
 """
 
 TaskAssistantSemanticCategory = SemanticCategory(

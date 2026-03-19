@@ -12,6 +12,7 @@ from memmachine.common.api import MemoryType as MemoryTypeE
 from memmachine.common.api.spec import (
     AddMemoriesSpec,
     AddMemoryResult,
+    ConsolidateMemoriesResponse,
     Episode,
     EpisodicSearchResult,
     ListMemoriesSpec,
@@ -241,3 +242,57 @@ async def _list_target_memories(
         status=0,
         content=content,
     )
+
+
+async def _consolidate_memories(
+    spec: "ConsolidateMemoriesSpec",
+    memmachine: MemMachine,
+) -> ConsolidateMemoriesResponse:
+    """
+    Trigger consolidation for a specific set_id.
+
+    Consolidation runs asynchronously in the background. This function returns
+    immediately after acquiring the lock.
+
+    Args:
+        spec: Consolidation specification with set_id and force flag
+        memmachine: MemMachine instance
+
+    Returns:
+        ConsolidateMemoriesResponse with lock acquisition status
+    """
+    from memmachine.common.api.spec import ConsolidateMemoriesSpec
+
+    logger.info(
+        "Consolidating memories - set_id: %s, force: %s",
+        spec.set_id,
+        spec.force,
+    )
+
+    lock_acquired = await memmachine.trigger_consolidation(
+        set_id=spec.set_id,
+        force=spec.force,
+    )
+
+    # Build response message
+    if not lock_acquired:
+        message = (
+            f"Consolidation skipped for set_id '{spec.set_id}': "
+            "Lock is held by another process, or set has no semantic categories configured. "
+            "Try again later."
+        )
+        consolidated = False
+    else:
+        message = (
+            f"Consolidation started for set_id '{spec.set_id}'. "
+            "Processing is running in the background."
+        )
+        consolidated = True  # Started, will complete in background
+
+    return ConsolidateMemoriesResponse(
+        message=message,
+        set_id=spec.set_id,
+        consolidated=consolidated,
+        lock_acquired=lock_acquired,
+    )
+

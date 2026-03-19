@@ -271,12 +271,12 @@ task_assistant_consolidation_prompt = """
     Example: "DELETE id=3 (action: 'User confirmed email')"
     
     **Step 3: Group remaining by feature name**
-    Group memories with same feature name
+    Group memories with same/similar feature name
     Example: "Group EMAIL: id=1 (personal@email.com), id=2 (work@company.com)"
     
     **Step 4: Decide action per group**
-    - Same values → keep one or merge
-    - Different values → check if accounts or evolution
+    - Same meaning → keep one or merge
+    - Different values → check if it's different accounts or evolution
     - Apply feature name rules (suffixes, ownership)
     
     **Step 5: Generate output**

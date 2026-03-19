@@ -530,9 +530,12 @@ class MemMachine:
         from memmachine.semantic_memory.semantic_ingestion import IngestionService
 
         semantic_service = await self._resources.get_semantic_service()
-        semantic_storage = await self._resources.get_semantic_storage()
+        semantic_manager = await self._resources.get_semantic_manager()
+        
+        # Get storage through the semantic manager
+        semantic_storage = await semantic_manager._get_semantic_storage()
         episode_storage = await self._resources.get_episode_storage()
-        resource_retriever = self._resources._resource_retriever
+        resource_retriever = await semantic_manager.get_semantic_session_resource_manager()
 
         logger.info(
             "Triggering consolidation for set_id: %s (force: %s)",

@@ -427,7 +427,10 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             for hid in history_ids
         ]
 
-        stmt = insert(citation_association_table).values(rows)
+        # Use INSERT ... ON CONFLICT DO NOTHING to handle duplicate citations gracefully
+        # This can happen during consolidation when citations are being merged
+        stmt = pg_insert(citation_association_table).values(rows)
+        stmt = stmt.on_conflict_do_nothing()
 
         async with self._create_session() as session:
             await session.execute(stmt)

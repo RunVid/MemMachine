@@ -511,21 +511,20 @@ class MemMachine:
         set_id: str,
         *,
         force: bool = False,
-    ) -> tuple[bool, bool]:
+    ) -> bool:
         """
         Manually trigger consolidation for a specific set_id.
 
-        This method acquires a lock to prevent race conditions and then
-        consolidates memories for the specified set.
+        This method acquires a lock and starts consolidation in the background.
+        Returns immediately after lock acquisition without waiting for consolidation to complete.
 
         Args:
             set_id: The set ID to consolidate (e.g., 'mem_user_xxx', 'mem_role_xxx')
             force: If True, bypasses consolidation threshold checks
 
         Returns:
-            Tuple of (lock_acquired, consolidated)
-                lock_acquired: True if lock was successfully acquired
-                consolidated: True if consolidation was applied (only meaningful if lock_acquired=True)
+            bool: True if lock was successfully acquired and consolidation started,
+                  False if lock is held by another process
         """
         from memmachine.semantic_memory.semantic_ingestion import IngestionService
 
@@ -551,14 +550,14 @@ class MemMachine:
                     "set_id %s has no semantic categories configured - cannot consolidate",
                     set_id,
                 )
-                return (False, False)
+                return False
         except Exception as e:
             logger.error(
                 "Failed to get resources for set_id %s: %s",
                 set_id,
                 e,
             )
-            return (False, False)
+            return False
 
         # Use the forced threshold if force=True, otherwise use configured threshold
         consolidation_threshold = 0 if force else semantic_service._consolidation_threshold
@@ -590,44 +589,44 @@ class MemMachine:
                 "SKIPPED set_id=%s - lock held by another process",
                 set_id,
             )
-            return (False, False)
+            return False
 
         logger.info(
-            "ACQUIRED lock for set_id=%s, owner=%s - starting consolidation",
+            "ACQUIRED lock for set_id=%s, owner=%s - starting background consolidation",
             set_id,
             ingestion_service._owner_id,
         )
 
-        consolidated = False
-        try:
-            # Call consolidation directly
-            await ingestion_service._consolidate_set_memories_if_applicable(
-                set_id=set_id,
-                resources=resources,
-            )
-            consolidated = True
-            logger.info("Successfully consolidated set_id: %s", set_id)
+        # Run consolidation in background
+        async def _run_consolidation_with_lock() -> None:
+            try:
+                await ingestion_service._consolidate_set_memories_if_applicable(
+                    set_id=set_id,
+                    resources=resources,
+                )
+                logger.info("Successfully consolidated set_id: %s", set_id)
 
-        except Exception as e:
-            logger.exception(
-                "Failed to consolidate set_id %s: %s",
-                set_id,
-                e,
-            )
-            # Return lock_acquired=True but consolidated=False to indicate we tried
-            consolidated = False
+            except Exception:
+                logger.exception(
+                    "Failed to consolidate set_id %s",
+                    set_id,
+                )
 
-        finally:
-            # Always release the lock
-            await semantic_storage.release_ingestion_lock(
-                set_id=set_id,
-                owner_id=ingestion_service._owner_id,
-            )
-            logger.info(
-                "RELEASED lock for set_id=%s, owner=%s - consolidation complete",
-                set_id,
-                ingestion_service._owner_id,
-            )
+            finally:
+                # Always release the lock
+                await semantic_storage.release_ingestion_lock(
+                    set_id=set_id,
+                    owner_id=ingestion_service._owner_id,
+                )
+                logger.info(
+                    "RELEASED lock for set_id=%s, owner=%s - consolidation complete",
+                    set_id,
+                    ingestion_service._owner_id,
+                )
 
-        return (True, consolidated)
+        # Start background task and don't wait for it
+        asyncio.create_task(_run_consolidation_with_lock())
+
+        # Return immediately after acquiring lock
+        return True
 

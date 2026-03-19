@@ -251,12 +251,15 @@ async def _consolidate_memories(
     """
     Trigger consolidation for a specific set_id.
 
+    Consolidation runs asynchronously in the background. This function returns
+    immediately after acquiring the lock.
+
     Args:
         spec: Consolidation specification with set_id and force flag
         memmachine: MemMachine instance
 
     Returns:
-        ConsolidateMemoriesResponse with summary of consolidation results
+        ConsolidateMemoriesResponse with lock acquisition status
     """
     from memmachine.common.api.spec import ConsolidateMemoriesSpec
 
@@ -266,7 +269,7 @@ async def _consolidate_memories(
         spec.force,
     )
 
-    lock_acquired, consolidated = await memmachine.trigger_consolidation(
+    lock_acquired = await memmachine.trigger_consolidation(
         set_id=spec.set_id,
         force=spec.force,
     )
@@ -275,16 +278,16 @@ async def _consolidate_memories(
     if not lock_acquired:
         message = (
             f"Consolidation skipped for set_id '{spec.set_id}': "
-            "Lock is held by another process. Try again later."
+            "Lock is held by another process, or set has no semantic categories configured. "
+            "Try again later."
         )
-    elif not consolidated:
-        message = (
-            f"No consolidation applied for set_id '{spec.set_id}'. "
-            "The set may have insufficient memories to consolidate. "
-            "Try using force=true to bypass threshold checks."
-        )
+        consolidated = False
     else:
-        message = f"Consolidation complete for set_id '{spec.set_id}'."
+        message = (
+            f"Consolidation started for set_id '{spec.set_id}'. "
+            "Processing is running in the background."
+        )
+        consolidated = True  # Started, will complete in background
 
     return ConsolidateMemoriesResponse(
         message=message,

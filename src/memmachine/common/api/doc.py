@@ -458,12 +458,17 @@ class RouterDoc:
     - Cleaning up memories after schema or configuration changes
     - Reducing memory count when thresholds are reached
 
+    **Asynchronous Processing:**
+    This endpoint returns immediately after acquiring the lock. Consolidation runs
+    in the background and may take several seconds to minutes depending on the
+    number of memories. The lock is automatically released when processing completes.
+
     **Parameters:**
     - `set_id`: The memory set identifier to consolidate (required)
       - Format: `mem_user_<id>` for user/profile memories
       - Format: `mem_role_<id>` for role memories
       - Format: `mem_session_<id>` for session memories
-      - Example: `mem_user_project123`, `mem_user_alice`, `mem_role_assistant`
+      - Example: `mem_user_user_760653034186354688`
     - `force`: Set to `true` to bypass consolidation threshold checks (default: `false`)
 
     **Lock Acquisition:**
@@ -478,10 +483,8 @@ class RouterDoc:
     of small memory sets. Use `force=true` to consolidate regardless of memory count.
 
     **Response:**
-    Returns information about whether the lock was acquired and whether consolidation
-    was applied:
-    - `lock_acquired: true, consolidated: true` - Success
-    - `lock_acquired: true, consolidated: false` - Lock acquired but insufficient memories
+    Returns immediately after attempting to acquire the lock:
+    - `lock_acquired: true, consolidated: true` - Lock acquired, processing started in background
     - `lock_acquired: false, consolidated: false` - Another process holds the lock
 
     **Example Use Cases:**

@@ -20,6 +20,7 @@ life_context_tags: dict[str, str] = {
     "goals": "Long-term goals and aspirations: career goals, personal development goals, health and fitness goals, financial goals, relationship goals, educational goals, life vision, and desired achievements.",
     "personality": "Stable personality traits and characteristics: communication style, decision-making style, introversion/extroversion, openness to new experiences, conscientiousness, emotional stability, and how the user typically interacts with others.",
     "life_situation": "Stable life circumstances and context: permanent living situation (city/region), family structure, work situation (job/career), major life stage, and long-term commitments.",
+    "general_preference": "Broad, cross-cutting tastes and defaults: general likes and dislikes, environment and pacing preferences (quiet vs busy, urban vs nature), how they prefer advice or explanations (brief vs detailed, direct vs gentle), aesthetic or stylistic taste, learning or information consumption preferences when none of these are a specific hobby (interests) or habit (lifestyle). Use for softer, general preferences—not structured contact/account facts (those belong in task-oriented memory).",
 }
 
 # Optimized description for life-oriented personal context
@@ -30,7 +31,7 @@ life_context_description = """
     ## YOUR ROLE
     
     - Extract personal insights: WHY and HOW the user thinks, feels, and behaves
-    - Store interests, lifestyle patterns, goals, personality traits, and life circumstances
+    - Store interests, lifestyle patterns, goals, personality traits, life circumstances, and general_preference items
     - Build a psychological profile that enables meaningful, personalized advice
     
     Do NOT Extract:
@@ -42,12 +43,13 @@ life_context_description = """
     
     ## TAG RULES
     
-    You MUST ONLY use: interests, lifestyle, goals, personality, life_situation
-    - interests: hobbies, passions, entertainment preferences
+    You MUST ONLY use: interests, lifestyle, goals, personality, life_situation, general_preference
+    - interests: hobbies, passions, concrete activities they enjoy
     - lifestyle: routines, habits, work-life balance
     - goals: aspirations, objectives, plans
     - personality: character traits, behavioral patterns
     - life_situation: stable circumstances, context
+    - general_preference: broad tastes and defaults (how they like advice, environments, pacing, aesthetics)—not specific hobbies or daily habits
     - DO NOT create new tags - choose the closest matching tag
     - CRITICAL: Tags are case-sensitive and MUST be lowercase (e.g., "interests" NOT "INTERESTS" or "Interests")
     
@@ -56,11 +58,12 @@ life_context_description = """
     **ONLY extract STATIC, FACTUAL DATA VALUES - NOT actions or events.**
     
     Stable, long-term information:
-    - Interests: hobbies, passions, creative pursuits, learning interests, entertainment preferences
+    - Interests: hobbies, passions, creative pursuits, learning interests, entertainment tied to specific activities
     - Lifestyle: daily routines, sleep patterns, exercise habits, dietary habits, work-life balance
     - Goals: career aspirations, personal development goals, health goals, life vision, educational goals
     - Personality: communication style, decision-making style, introversion/extroversion, emotional patterns
     - Life Situation: living situation (city/region), family structure, work situation, major life stage
+    - General preference (tag general_preference): general tastes and defaults (e.g., prefers minimal explanations, likes quiet spaces, prefers gentler feedback)
     - Values: core values, priorities, what drives decisions
     
     **CRITICAL: Extract ONLY the personal characteristic itself, NOT the action or event.**
@@ -68,10 +71,11 @@ life_context_description = """
     Examples of CORRECT extraction:
     - "I exercise 3 times a week" → feature="EXERCISE HABIT", value="exercises 3 times a week" ✓
     - "My goal is to become a senior manager" → feature="CAREER GOAL", value="become a senior manager" ✓
-    - "I prefer working alone" → feature="SOCIAL PREFERENCE", value="prefers working alone" ✓
+    - "I prefer working alone" → feature="SOCIAL PREFERENCE", value="prefers working alone" ✓ (personality)
+    - "I like short bullet answers, not long essays" → tag=general_preference, feature="PREFERENCE EXPLANATION DEPTH", value="prefers concise bullet-style answers" ✓
     
     Key Questions:
-    1. "Is this a stable personal characteristic (interest, habit, goal, trait)?" If YES → extract. If NO → skip.
+    1. "Is this a stable personal characteristic (interest, habit, goal, trait, preference)?" If YES → extract. If NO → skip.
     2. "Does this describe an action or event?" If YES → skip (episodic memory handles this).
     3. "Will this still be accurate in 6 months?" If YES → extract. If NO → skip.
     
@@ -129,6 +133,10 @@ life_context_description = """
     
     **Personality:**
     - "COMMUNICATION STYLE", "DECISION MAKING STYLE", "SOCIAL PREFERENCE", "EMOTIONAL PATTERN"
+    
+    **general_preference:** (broad tastes—use when it is a default or style, not a hobby or routine)
+    - "PREFERENCE ADVICE STYLE", "PREFERENCE ENVIRONMENT", "PREFERENCE EXPLANATION DEPTH", "PREFERENCE AESTHETIC"
+    - Multiple distinct preferences: suffix descriptively, e.g. "PREFERENCE INFORMATION DENSITY", "PREFERENCE FEEDBACK TONE"
     
     **Life Situation:**
     - "CURRENT LIFE STAGE", "FAMILY SITUATION", "WORK SITUATION"
@@ -206,7 +214,7 @@ life_context_consolidation_prompt = """
     ### Feature Names Format
     - UPPERCASE with SPACES (e.g., "INTEREST PHOTOGRAPHY", "CAREER GOAL")
     - Use descriptive suffixes for multiple items: "INTEREST PHOTOGRAPHY", "INTEREST COOKING"
-    - Standard patterns: "INTEREST [NAME]", "EXERCISE HABIT", "CAREER GOAL", "COMMUNICATION STYLE"
+    - Standard patterns: "INTEREST [NAME]", "EXERCISE HABIT", "CAREER GOAL", "COMMUNICATION STYLE", "PREFERENCE [AREA]"
     - Avoid vague names: use "INTEREST PHOTOGRAPHY" not "PRIMARY INTEREST"
 
     ### Step 1: DELETE First (Highest Priority)
@@ -227,7 +235,7 @@ life_context_consolidation_prompt = """
     
     **OK to Keep (can put in keep_memories):**
     - Long-term interests, stable lifestyle patterns
-    - Personality traits, life goals, core values
+    - Personality traits, life goals, core values, general_preference memories
     - Stable life circumstances
     - ONLY if the value is actual characteristic (e.g., "exercises regularly"), NOT action description
 

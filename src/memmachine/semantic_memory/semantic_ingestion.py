@@ -263,7 +263,14 @@ class IngestionService:
                         )
                 elif semantic_category.name == "profile_life_context":
                     # Filter features to only include valid tags for profile_life_context category
-                    valid_tags = {"interests", "lifestyle", "goals", "personality", "life_situation"}
+                    valid_tags = {
+                        "interests",
+                        "lifestyle",
+                        "goals",
+                        "personality",
+                        "life_situation",
+                        "general_preference",
+                    }
                     original_count = len(features)
                     features = [f for f in features if f.tag in valid_tags]
                     filtered_count = original_count - len(features)
@@ -322,7 +329,14 @@ class IngestionService:
                                 message.uid,
                             )
                     elif semantic_category.name == "profile_life_context":
-                        valid_tags = {"interests", "lifestyle", "goals", "personality", "life_situation"}
+                        valid_tags = {
+                            "interests",
+                            "lifestyle",
+                            "goals",
+                            "personality",
+                            "life_situation",
+                            "general_preference",
+                        }
                         default_tag = "interests"  # Default to interests as it's the most general
                         corrected_count = 0
                         for cmd in commands:

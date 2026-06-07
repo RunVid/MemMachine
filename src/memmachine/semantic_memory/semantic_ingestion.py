@@ -33,7 +33,7 @@ INGESTION_LOCK_TIMEOUT_SECONDS = 1200
 INGESTION_BATCH_SIZE = 25
 INGESTION_LLM_BUDGET_SECONDS = 1080  # num_batches * llm_timeout must not exceed 18 min
 INGESTION_LLM_TIMEOUT_SECONDS = 300  # 5 min per LLM call when batch count is low
-INGESTION_MAX_CONCURRENT_SETS = 2
+INGESTION_MAX_CONCURRENT_SETS = 5
 
 
 def _compute_llm_timeout_seconds(num_batches: int) -> int:

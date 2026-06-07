@@ -33,6 +33,7 @@ INGESTION_LOCK_TIMEOUT_SECONDS = 1200
 INGESTION_BATCH_SIZE = 25
 INGESTION_LLM_BUDGET_SECONDS = 1080  # num_batches * llm_timeout must not exceed 18 min
 INGESTION_LLM_TIMEOUT_SECONDS = 300  # 5 min per LLM call when batch count is low
+INGESTION_MAX_CONCURRENT_SETS = 2
 
 
 def _compute_llm_timeout_seconds(num_batches: int) -> int:
@@ -79,6 +80,9 @@ class IngestionService:
         self._resource_retriever = params.resource_retriever
         self._consolidation_threshold = params.consolidated_threshold
         self._debug_fail_loudly = params.debug_fail_loudly
+        self._set_concurrency_semaphore = asyncio.Semaphore(
+            max(1, INGESTION_MAX_CONCURRENT_SETS),
+        )
         
         # Generate unique owner ID for this pod/process
         import os
@@ -88,14 +92,23 @@ class IngestionService:
         self._owner_id = f"{hostname}-{pid}"
 
     async def process_set_ids(self, set_ids: list[SetIdT]) -> None:
-        """Process ingestion for multiple set_ids concurrently."""
+        """Process ingestion for multiple set_ids with bounded concurrency."""
         if len(set_ids) == 0:
             return
-        
-        logger.info("Starting ingestion processing for set ids: %s", set_ids)
-        
+
+        logger.info(
+            "Starting ingestion processing for %d set ids (max %d concurrent): %s",
+            len(set_ids),
+            INGESTION_MAX_CONCURRENT_SETS,
+            set_ids,
+        )
+
+        async def _process_single_set_with_limit(set_id: SetIdT) -> None:
+            async with self._set_concurrency_semaphore:
+                await self._process_single_set(set_id)
+
         results = await asyncio.gather(
-            *[self._process_single_set(set_id) for set_id in set_ids],
+            *[_process_single_set_with_limit(set_id) for set_id in set_ids],
             return_exceptions=True,
         )
 

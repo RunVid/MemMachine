@@ -260,6 +260,36 @@ async def test_process_single_set_calls_llm_once_per_batch(
 
 
 @pytest.mark.asyncio
+async def test_process_set_ids_limits_concurrent_sets(
+    ingestion_service: IngestionService,
+    monkeypatch,
+):
+    active_count = 0
+    max_active = 0
+    count_lock = asyncio.Lock()
+
+    async def tracked_process(set_id: str) -> None:
+        nonlocal active_count, max_active
+        async with count_lock:
+            active_count += 1
+            max_active = max(max_active, active_count)
+        try:
+            await asyncio.sleep(0.05)
+        finally:
+            async with count_lock:
+                active_count -= 1
+
+    monkeypatch.setattr(ingestion_service, "_process_single_set", tracked_process)
+
+    await ingestion_service.process_set_ids(
+        ["user-1", "user-2", "user-3", "user-4"],
+    )
+
+    assert max_active <= 2
+    assert active_count == 0
+
+
+@pytest.mark.asyncio
 async def test_process_single_set_skips_semantic_update_on_llm_timeout(
     semantic_storage: SemanticStorage,
     episode_storage: EpisodeStorage,

@@ -526,7 +526,11 @@ class MemMachine:
             bool: True if lock was successfully acquired and consolidation started,
                   False if lock is held by another process
         """
-        from memmachine.semantic_memory.semantic_ingestion import IngestionService
+        from memmachine.semantic_memory.semantic_ingestion import (
+            INGESTION_LLM_TIMEOUT_SECONDS,
+            INGESTION_LOCK_TIMEOUT_SECONDS,
+            IngestionService,
+        )
 
         semantic_service = await self._resources.get_semantic_service()
         semantic_manager = await self._resources.get_semantic_manager()
@@ -581,7 +585,7 @@ class MemMachine:
         lock_acquired = await semantic_storage.try_acquire_ingestion_lock(
             set_id=set_id,
             owner_id=ingestion_service._owner_id,
-            timeout_seconds=300,  # 5 minutes timeout
+            timeout_seconds=INGESTION_LOCK_TIMEOUT_SECONDS,
         )
 
         if not lock_acquired:
@@ -603,6 +607,7 @@ class MemMachine:
                 await ingestion_service._consolidate_set_memories_if_applicable(
                     set_id=set_id,
                     resources=resources,
+                    llm_timeout_seconds=INGESTION_LLM_TIMEOUT_SECONDS,
                 )
                 logger.info("Successfully consolidated set_id: %s", set_id)
 

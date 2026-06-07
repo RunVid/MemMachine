@@ -37,7 +37,7 @@ async def test_semantic_llm_update_with_empty_profile(
 ):
     commands = await llm_feature_update(
         features=[],
-        message_content="I like blue cars made in Berlin, Germany",
+        message_contents=["I like blue cars made in Berlin, Germany"],
         model=real_llm_model,
         update_prompt=update_prompt,
     )

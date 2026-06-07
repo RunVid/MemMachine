@@ -317,9 +317,10 @@ async def test_multiple_sets_processed_independently(
     await service.start()
 
     async def mock_llm_update(*args, **kwargs):
-        # Return different commands based on message content
-        message = kwargs.get("message_content", "")
-        if "user-a" in str(message):
+        # Return different commands based on batch message content
+        message_contents = kwargs.get("message_contents", [])
+        combined = "\n".join(message_contents)
+        if "user-a" in combined:
             return [
                 SemanticCommand(
                     command=SemanticCommandType.ADD,

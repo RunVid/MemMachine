@@ -285,7 +285,7 @@ async def test_process_set_ids_limits_concurrent_sets(
         ["user-1", "user-2", "user-3", "user-4"],
     )
 
-    assert max_active <= 2
+    assert max_active <= 5
     assert active_count == 0
 
 

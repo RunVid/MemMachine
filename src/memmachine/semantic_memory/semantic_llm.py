@@ -59,20 +59,21 @@ class _SemanticFeatureUpdateRes(BaseModel):
 @validate_call
 async def llm_feature_update(
     features: list[SemanticFeature],
-    message_content: str,
+    message_contents: list[str],
     model: InstanceOf[LanguageModel],
     update_prompt: str,
 ) -> list[SemanticCommand]:
-    """Generate feature update commands from an incoming message using the LLM."""
+    """Generate feature update commands from incoming messages using the LLM."""
+    history = "\n".join(message_contents)
     user_prompt = (
         "The old feature set is provided below:\n"
         "<OLD_PROFILE>\n"
         f"{json.dumps(_features_to_llm_format(features))}\n"
         "</OLD_PROFILE>\n"
         "\n"
-        "The history is provided below:\n"
+        "The conversation history is provided below:\n"
         "<HISTORY>\n"
-        f"{message_content}\n"
+        f"{history}\n"
         "</HISTORY>\n"
     )
 

@@ -190,7 +190,7 @@ class SemanticStorage(ABC):
         Try to acquire an ingestion lock for the given set_id.
         
         This lock covers the ENTIRE ingestion cycle for a set_id:
-        - Claiming all uningested messages (in batches of 50)
+        - Claiming all uningested messages (in batches, size set by ingestion service)
         - Processing each batch
         - Consolidation
         

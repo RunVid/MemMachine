@@ -346,3 +346,5 @@ class SemanticService:
                 if self._debug_fail_loudly:
                     raise
                 logger.exception("background task crashed, restarting")
+
+            await asyncio.sleep(self._background_ingestion_interval_sec)

@@ -49,7 +49,7 @@ async def test_empty_update_response(
 
     commands = await llm_feature_update(
         features=basic_features,
-        message_content="I like blue cars",
+        message_contents=["I like blue cars"],
         model=magic_mock_llm_model,
         update_prompt="Update features",
     )
@@ -77,7 +77,7 @@ async def test_single_command_update_response(
 
     commands = await llm_feature_update(
         features=basic_features,
-        message_content="I like blue cars",
+        message_contents=["I like blue cars"],
         model=magic_mock_llm_model,
         update_prompt="Update features",
     )
@@ -116,7 +116,7 @@ async def test_multiple_commands_update_response(
 
     commands = await llm_feature_update(
         features=basic_features,
-        message_content="I like blue Tesla cars",
+        message_contents=["I like blue Tesla cars"],
         model=magic_mock_llm_model,
         update_prompt="Update features",
     )
@@ -219,7 +219,7 @@ async def test_llm_feature_update_handles_model_api_error(
     with pytest.raises(ExternalServiceAPIError):
         await llm_feature_update(
             features=basic_features,
-            message_content="I like blue cars",
+            message_contents=["I like blue cars"],
             model=magic_mock_llm_model,
             update_prompt="Update features",
         )
@@ -243,7 +243,7 @@ async def test_llm_feature_update_with_delete_command(
 
     commands = await llm_feature_update(
         features=basic_features,
-        message_content="I don't like pizza anymore",
+        message_contents=["I don't like pizza anymore"],
         model=magic_mock_llm_model,
         update_prompt="Update features",
     )

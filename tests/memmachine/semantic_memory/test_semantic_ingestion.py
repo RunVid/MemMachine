@@ -1,5 +1,6 @@
 """Tests for the ingestion service using the in-memory semantic storage."""
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import numpy as np
@@ -207,6 +208,145 @@ async def test_process_single_set_applies_commands(
 
 
 @pytest.mark.asyncio
+async def test_process_single_set_calls_llm_once_per_batch(
+    ingestion_service: IngestionService,
+    semantic_storage: SemanticStorage,
+    episode_storage: EpisodeStorage,
+    semantic_category: SemanticCategory,
+    monkeypatch,
+):
+    message_ids = []
+    for content in ("I love blue cars", "Blue is my favorite color"):
+        message_id = await add_history(episode_storage, content=content)
+        await semantic_storage.add_history_to_set(
+            set_id="user-123",
+            history_id=message_id,
+        )
+        message_ids.append(message_id)
+
+    commands = [
+        SemanticCommand(
+            command="add",
+            feature="favorite_car",
+            tag="car",
+            value="blue",
+        ),
+    ]
+    llm_feature_update_mock = AsyncMock(return_value=commands)
+    monkeypatch.setattr(
+        "memmachine.semantic_memory.semantic_ingestion.llm_feature_update",
+        llm_feature_update_mock,
+    )
+
+    await ingestion_service._process_single_set("user-123")
+
+    llm_feature_update_mock.assert_awaited_once()
+    call_kwargs = llm_feature_update_mock.await_args.kwargs
+    assert call_kwargs["message_contents"] == [
+        "[dev] I love blue cars",
+        "[dev] Blue is my favorite color",
+    ]
+
+    filter_str = (
+        f"set_id IN ('user-123') AND category_name IN ('{semantic_category.name}')"
+    )
+    features = await semantic_storage.get_feature_set(
+        filter_expr=parse_filter(filter_str),
+        load_citations=True,
+    )
+    assert len(features) == 1
+    assert features[0].metadata.citations is not None
+    assert set(features[0].metadata.citations) == set(message_ids)
+
+
+@pytest.mark.asyncio
+async def test_process_set_ids_limits_concurrent_sets(
+    ingestion_service: IngestionService,
+    monkeypatch,
+):
+    active_count = 0
+    max_active = 0
+    count_lock = asyncio.Lock()
+
+    async def tracked_process(set_id: str) -> None:
+        nonlocal active_count, max_active
+        async with count_lock:
+            active_count += 1
+            max_active = max(max_active, active_count)
+        try:
+            await asyncio.sleep(0.05)
+        finally:
+            async with count_lock:
+                active_count -= 1
+
+    monkeypatch.setattr(ingestion_service, "_process_single_set", tracked_process)
+
+    await ingestion_service.process_set_ids(
+        ["user-1", "user-2", "user-3", "user-4"],
+    )
+
+    assert max_active <= 5
+    assert active_count == 0
+
+
+@pytest.mark.asyncio
+async def test_process_single_set_skips_semantic_update_on_llm_timeout(
+    semantic_storage: SemanticStorage,
+    episode_storage: EpisodeStorage,
+    resource_retriever: MockResourceRetriever,
+    semantic_category: SemanticCategory,
+    monkeypatch,
+):
+    params = IngestionService.Params(
+        semantic_storage=semantic_storage,
+        history_store=episode_storage,
+        resource_retriever=resource_retriever,
+        consolidated_threshold=2,
+    )
+    ingestion_service = IngestionService(params)
+
+    message_id = await add_history(episode_storage, content="I love blue cars")
+    await semantic_storage.add_history_to_set(set_id="user-123", history_id=message_id)
+
+    async def slow_llm_update(*args, **kwargs):
+        await asyncio.sleep(1)
+        return [
+            SemanticCommand(
+                command="add",
+                feature="favorite_car",
+                tag="car",
+                value="blue",
+            ),
+        ]
+
+    monkeypatch.setattr(
+        "memmachine.semantic_memory.semantic_ingestion.llm_feature_update",
+        slow_llm_update,
+    )
+    monkeypatch.setattr(
+        "memmachine.semantic_memory.semantic_ingestion.INGESTION_LLM_TIMEOUT_SECONDS",
+        0.01,
+    )
+
+    await ingestion_service._process_single_set("user-123")
+
+    filter_str = (
+        f"set_id IN ('user-123') AND category_name IN ('{semantic_category.name}')"
+    )
+    features = await semantic_storage.get_feature_set(
+        filter_expr=parse_filter(filter_str),
+    )
+    assert features == []
+    assert (
+        await semantic_storage.get_history_messages(
+            set_ids=["user-123"],
+            is_ingested=False,
+        )
+        == []
+    )
+
+
+@pytest.mark.asyncio
 async def test_consolidation_groups_by_tag(
     ingestion_service: IngestionService,
     semantic_storage: SemanticStorage,
@@ -243,6 +383,7 @@ async def test_consolidation_groups_by_tag(
     await ingestion_service._consolidate_set_memories_if_applicable(
         set_id="user-456",
         resources=resources,
+        llm_timeout_seconds=300,
     )
 
     assert dedupe_mock.await_count == 1
@@ -315,6 +456,7 @@ async def test_deduplicate_features_merges_and_relabels(
         memories=memories,
         semantic_category=semantic_category,
         resources=resources,
+        llm_timeout_seconds=300,
     )
 
     llm_consolidate_mock.assert_awaited_once()

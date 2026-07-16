@@ -29,6 +29,21 @@ from memmachine.semantic_memory.storage.storage_base import SemanticStorage
 
 logger = logging.getLogger(__name__)
 
+INGESTION_LOCK_TIMEOUT_SECONDS = 1800
+INGESTION_BATCH_SIZE = 25
+INGESTION_LLM_BUDGET_SECONDS = 1200  # num_batches * llm_timeout must not exceed 20 min
+INGESTION_LLM_TIMEOUT_SECONDS = 300  # 5 min per LLM call when batch count is low
+INGESTION_MAX_CONCURRENT_SETS = 5
+
+
+def _compute_llm_timeout_seconds(num_batches: int) -> int:
+    """Per-call LLM timeout: 5 min by default, reduced when batch count grows."""
+    num_batches = max(1, num_batches)
+    return min(
+        INGESTION_LLM_TIMEOUT_SECONDS,
+        INGESTION_LLM_BUDGET_SECONDS // num_batches,
+    )
+
 
 def _get_isolation_type(set_id: str) -> str:
     """Determine the isolation type from set_id prefix."""
@@ -65,6 +80,9 @@ class IngestionService:
         self._resource_retriever = params.resource_retriever
         self._consolidation_threshold = params.consolidated_threshold
         self._debug_fail_loudly = params.debug_fail_loudly
+        self._set_concurrency_semaphore = asyncio.Semaphore(
+            max(1, INGESTION_MAX_CONCURRENT_SETS),
+        )
         
         # Generate unique owner ID for this pod/process
         import os
@@ -74,14 +92,23 @@ class IngestionService:
         self._owner_id = f"{hostname}-{pid}"
 
     async def process_set_ids(self, set_ids: list[SetIdT]) -> None:
-        """Process ingestion for multiple set_ids concurrently."""
+        """Process ingestion for multiple set_ids with bounded concurrency."""
         if len(set_ids) == 0:
             return
-        
-        logger.info("Starting ingestion processing for set ids: %s", set_ids)
-        
+
+        logger.info(
+            "Starting ingestion processing for %d set ids (max %d concurrent): %s",
+            len(set_ids),
+            INGESTION_MAX_CONCURRENT_SETS,
+            set_ids,
+        )
+
+        async def _process_single_set_with_limit(set_id: SetIdT) -> None:
+            async with self._set_concurrency_semaphore:
+                await self._process_single_set(set_id)
+
         results = await asyncio.gather(
-            *[self._process_single_set(set_id) for set_id in set_ids],
+            *[_process_single_set_with_limit(set_id) for set_id in set_ids],
             return_exceptions=True,
         )
 
@@ -106,7 +133,7 @@ class IngestionService:
         lock_acquired = await self._semantic_storage.try_acquire_ingestion_lock(
             set_id=set_id,
             owner_id=self._owner_id,
-            timeout_seconds=300,  # 5 minutes timeout
+            timeout_seconds=INGESTION_LOCK_TIMEOUT_SECONDS,
         )
         
         if not lock_acquired:
@@ -141,7 +168,7 @@ class IngestionService:
         """
         Process all uningested messages for a set_id (called after lock is acquired).
         
-        This processes messages in batches of 50 until all are processed,
+        This processes messages in batches of 25 until all are processed,
         then performs consolidation once at the end.
         
         Note: This is only called for sets that have semantic categories configured.
@@ -149,13 +176,30 @@ class IngestionService:
         logger.info("Processing semantic ingestion for set_id: %s", set_id)
         resources = self._resource_retriever.get_resources(set_id)
 
-        # Process all uningested messages in batches of 50
+        pending_count = await self._semantic_storage.get_history_messages_count(
+            set_ids=[set_id],
+            is_ingested=False,
+        )
+        num_batches = max(
+            1,
+            (pending_count + INGESTION_BATCH_SIZE - 1) // INGESTION_BATCH_SIZE,
+        )
+        llm_timeout_seconds = _compute_llm_timeout_seconds(num_batches)
+        logger.info(
+            "set_id=%s pending=%d batches=%d llm_timeout=%ds",
+            set_id,
+            pending_count,
+            num_batches,
+            llm_timeout_seconds,
+        )
+
+        # Process all uningested messages in batches
         total_processed = 0
         while True:
             # Atomically claim next batch of messages
             history_ids = await self._semantic_storage.get_history_messages(
                 set_ids=[set_id],
-                limit=50,
+                limit=INGESTION_BATCH_SIZE,
                 is_ingested=False,
             )
             
@@ -179,6 +223,7 @@ class IngestionService:
                 set_id=set_id,
                 history_ids=history_ids,
                 resources=resources,
+                llm_timeout_seconds=llm_timeout_seconds,
             )
             
             total_processed += len(history_ids)
@@ -189,6 +234,7 @@ class IngestionService:
             await self._consolidate_set_memories_if_applicable(
                 set_id=set_id,
                 resources=resources,
+                llm_timeout_seconds=llm_timeout_seconds,
             )
     
     async def _process_message_batch(
@@ -196,6 +242,7 @@ class IngestionService:
         set_id: str,
         history_ids: list[EpisodeIdT],
         resources: InstanceOf[Resources],
+        llm_timeout_seconds: int,
     ) -> None:
         """Process a batch of messages for a set_id."""
         raw_messages = await asyncio.gather(
@@ -206,6 +253,13 @@ class IngestionService:
             raise ValueError("Failed to retrieve messages. Invalid history_ids")
 
         messages = TypeAdapter(list[Episode]).validate_python(raw_messages)
+
+        for message in messages:
+            if message.uid is None:
+                raise ValueError(
+                    "Message ID is None for message %s",
+                    message.model_dump(),
+                )
 
         logger.info("Processing %d messages for set %s", len(messages), set_id)
 
@@ -218,180 +272,88 @@ class IngestionService:
                 set_id,
                 len(messages),
             )
-            for message in messages:
-                if message.uid is None:
-                    logger.error(
-                        "Message ID is None for message %s", message.model_dump()
-                    )
 
-                    raise ValueError(
-                        "Message ID is None for message %s",
-                        message.model_dump(),
-                    )
+            filter_expr = And(
+                left=Comparison(field="set_id", op="=", value=set_id),
+                right=Comparison(
+                    field="category", op="=", value=semantic_category.name
+                ),
+            )
 
-                filter_expr = And(
-                    left=Comparison(field="set_id", op="=", value=set_id),
-                    right=Comparison(
-                        field="category", op="=", value=semantic_category.name
+            features = await self._semantic_storage.get_feature_set(
+                filter_expr=filter_expr,
+            )
+            features = self._filter_features_for_category(
+                features,
+                semantic_category.name,
+                set_id=set_id,
+            )
+            logger.debug(
+                "Found %d existing features for set_id %s, category %s",
+                len(features),
+                set_id,
+                semantic_category.name,
+            )
+
+            message_contents = [
+                f"[{message.producer_role}] {message.content}" for message in messages
+            ]
+
+            try:
+                commands = await asyncio.wait_for(
+                    llm_feature_update(
+                        features=features,
+                        message_contents=message_contents,
+                        model=resources.language_model,
+                        update_prompt=semantic_category.prompt.update_prompt,
                     ),
-                )
-
-                features = await self._semantic_storage.get_feature_set(
-                    filter_expr=filter_expr,
+                    timeout=llm_timeout_seconds,
                 )
                 logger.debug(
-                    "Found %d existing features for set_id %s, category %s",
-                    len(features),
+                    "LLM generated %d commands for batch of %d messages, category %s",
+                    len(commands),
+                    len(messages),
+                    semantic_category.name,
+                )
+                self._normalize_command_tags(
+                    commands,
+                    semantic_category.name,
+                    set_id=set_id,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "LLM feature update timed out after %ds for set_id=%s, category=%s; "
+                    "skipping semantic update (messages already marked ingested)",
+                    llm_timeout_seconds,
                     set_id,
                     semantic_category.name,
                 )
-
-                if semantic_category.name == "profile":
-                    # Filter features to only include valid tags for profile category
-                    valid_tags = {"basics", "contacts", "identities", "accounts", "preferences", "relationships", "services", "others"}
-                    original_count = len(features)
-                    features = [f for f in features if f.tag in valid_tags]
-                    filtered_count = original_count - len(features)
-                    
-                    if filtered_count > 0:
-                        logger.info(
-                            "Filtered out %d features with invalid tags for profile category - set_id=%s, message_id=%s, kept=%d features",
-                            filtered_count,
-                            set_id,
-                            message.uid,
-                            len(features),
-                        )
-                elif semantic_category.name == "profile_life_context":
-                    # Filter features to only include valid tags for profile_life_context category
-                    valid_tags = {
-                        "interests",
-                        "lifestyle",
-                        "goals",
-                        "personality",
-                        "life_situation",
-                        "general_preference",
-                    }
-                    original_count = len(features)
-                    features = [f for f in features if f.tag in valid_tags]
-                    filtered_count = original_count - len(features)
-                    
-                    if filtered_count > 0:
-                        logger.info(
-                            "Filtered out %d features with invalid tags for profile_life_context category - set_id=%s, message_id=%s, kept=%d features",
-                            filtered_count,
-                            set_id,
-                            message.uid,
-                            len(features),
-                        )
-
-                try:
-                    commands = await llm_feature_update(
-                        features=features,
-                        message_content=message.content,
-                        model=resources.language_model,
-                        update_prompt=semantic_category.prompt.update_prompt,
-                    )
-                    logger.debug(
-                        "LLM generated %d commands for message %s, category %s",
-                        len(commands),
-                        message.uid,
-                        semantic_category.name,
-                    )
-                    
-                    # Normalize and validate tags for profile category
-                    if semantic_category.name == "profile":
-                        valid_tags = {"basics", "contacts", "identities", "accounts", "preferences", "relationships", "services", "others"}
-                        default_tag = "others"
-                        corrected_count = 0
-                        for cmd in commands:
-                            original_tag = cmd.tag
-                            # First, convert to lowercase
-                            normalized_tag = cmd.tag.lower().strip()
-                            # Then check if it's in valid tags
-                            if normalized_tag not in valid_tags:
-                                normalized_tag = default_tag
-                            
-                            if original_tag != normalized_tag:
-                                corrected_count += 1
-                                logger.info(
-                                    "Corrected tag '%s' -> '%s' for command in message %s",
-                                    original_tag,
-                                    normalized_tag,
-                                    message.uid,
-                                )
-                            cmd.tag = normalized_tag
-                        
-                        if corrected_count > 0:
-                            logger.warning(
-                                "Corrected %d tag(s) for profile category - set_id=%s, message_id=%s",
-                                corrected_count,
-                                set_id,
-                                message.uid,
-                            )
-                    elif semantic_category.name == "profile_life_context":
-                        valid_tags = {
-                            "interests",
-                            "lifestyle",
-                            "goals",
-                            "personality",
-                            "life_situation",
-                            "general_preference",
-                        }
-                        default_tag = "interests"  # Default to interests as it's the most general
-                        corrected_count = 0
-                        for cmd in commands:
-                            original_tag = cmd.tag
-                            # First, convert to lowercase
-                            normalized_tag = cmd.tag.lower().strip()
-                            # Then check if it's in valid tags
-                            if normalized_tag not in valid_tags:
-                                normalized_tag = default_tag
-                            
-                            if original_tag != normalized_tag:
-                                corrected_count += 1
-                                logger.info(
-                                    "Corrected tag '%s' -> '%s' for command in message %s",
-                                    original_tag,
-                                    normalized_tag,
-                                    message.uid,
-                                )
-                            cmd.tag = normalized_tag
-                        
-                        if corrected_count > 0:
-                            logger.warning(
-                                "Corrected %d tag(s) for profile_life_context category - set_id=%s, message_id=%s",
-                                corrected_count,
-                                set_id,
-                                message.uid,
-                            )
-                except Exception:
-                    logger.exception(
-                        "Failed to process message %s for semantic type %s",
-                        message.uid,
-                        semantic_category.name,
-                    )
-                    if self._debug_fail_loudly:
-                        raise
-
-                    continue
-
-                await self._apply_commands(
-                    commands=commands,
-                    set_id=set_id,
-                    category_name=semantic_category.name,
-                    citation_id=message.uid,
-                    embedder=resources.embedder,
-                )
-                logger.debug(
-                    "Applied %d commands for message %s, category %s",
-                    len(commands),
-                    message.uid,
+                return
+            except Exception:
+                logger.exception(
+                    "Failed to process batch of %d messages for semantic type %s",
+                    len(messages),
                     semantic_category.name,
                 )
+                if self._debug_fail_loudly:
+                    raise
+                return
 
-                mark_messages.append(message.uid)
+            citation_ids = [message.uid for message in messages]
+            await self._apply_commands(
+                commands=commands,
+                set_id=set_id,
+                category_name=semantic_category.name,
+                citation_ids=citation_ids,
+                embedder=resources.embedder,
+            )
+            logger.debug(
+                "Applied %d commands for batch of %d messages, category %s",
+                len(commands),
+                len(messages),
+                semantic_category.name,
+            )
 
-        mark_messages: list[EpisodeIdT] = []
         semantic_category_runners = []
         for t in resources.semantic_categories:
             task = process_semantic_type(t)
@@ -400,25 +362,114 @@ class IngestionService:
         await asyncio.gather(*semantic_category_runners)
 
         logger.info(
-            "Finished processing %d messages out of %d for batch in set %s",
-            len(mark_messages),
+            "Finished processing batch of %d messages for set %s",
             len(messages),
             set_id,
         )
 
-        if len(mark_messages) == 0:
-            logger.warning(
-                "No messages were successfully processed for set_id %s. "
-                "This may indicate LLM processing errors.",
-                set_id,
-            )
-            # Note: Messages are already marked as ingested when claimed via get_history_messages()
-            # Even if processing failed, we don't want to retry them to avoid infinite loops
-            return
-
         # Note: Messages are already marked as ingested atomically when claimed
         # via get_history_messages(). No need to mark them again here.
         # Consolidation will be performed once after all batches are processed.
+
+    def _filter_features_for_category(
+        self,
+        features: list[SemanticFeature],
+        category_name: str,
+        *,
+        set_id: str,
+    ) -> list[SemanticFeature]:
+        if category_name == "profile":
+            valid_tags = {
+                "basics",
+                "contacts",
+                "identities",
+                "accounts",
+                "preferences",
+                "relationships",
+                "services",
+                "others",
+            }
+        elif category_name == "profile_life_context":
+            valid_tags = {
+                "interests",
+                "lifestyle",
+                "goals",
+                "personality",
+                "life_situation",
+                "general_preference",
+            }
+        else:
+            return features
+
+        original_count = len(features)
+        filtered = [feature for feature in features if feature.tag in valid_tags]
+        filtered_count = original_count - len(filtered)
+        if filtered_count > 0:
+            logger.info(
+                "Filtered out %d features with invalid tags for %s category - "
+                "set_id=%s, kept=%d features",
+                filtered_count,
+                category_name,
+                set_id,
+                len(filtered),
+            )
+        return filtered
+
+    def _normalize_command_tags(
+        self,
+        commands: list[SemanticCommand],
+        category_name: str,
+        *,
+        set_id: str,
+    ) -> None:
+        if category_name == "profile":
+            valid_tags = {
+                "basics",
+                "contacts",
+                "identities",
+                "accounts",
+                "preferences",
+                "relationships",
+                "services",
+                "others",
+            }
+            default_tag = "others"
+        elif category_name == "profile_life_context":
+            valid_tags = {
+                "interests",
+                "lifestyle",
+                "goals",
+                "personality",
+                "life_situation",
+                "general_preference",
+            }
+            default_tag = "interests"
+        else:
+            return
+
+        corrected_count = 0
+        for command in commands:
+            original_tag = command.tag
+            normalized_tag = command.tag.lower().strip()
+            if normalized_tag not in valid_tags:
+                normalized_tag = default_tag
+
+            if original_tag != normalized_tag:
+                corrected_count += 1
+                logger.info(
+                    "Corrected tag '%s' -> '%s' for command in batch",
+                    original_tag,
+                    normalized_tag,
+                )
+            command.tag = normalized_tag
+
+        if corrected_count > 0:
+            logger.warning(
+                "Corrected %d tag(s) for %s category - set_id=%s",
+                corrected_count,
+                category_name,
+                set_id,
+            )
 
     async def _apply_commands(
         self,
@@ -426,7 +477,7 @@ class IngestionService:
         commands: list[SemanticCommand],
         set_id: SetIdT,
         category_name: str,
-        citation_id: EpisodeIdT | None,
+        citation_ids: list[EpisodeIdT] | None,
         embedder: InstanceOf[Embedder],
     ) -> None:
         for command in commands:
@@ -443,8 +494,8 @@ class IngestionService:
                         embedding=np.array(value_embedding),
                     )
 
-                    if citation_id is not None:
-                        await self._semantic_storage.add_citations(f_id, [citation_id])
+                    if citation_ids:
+                        await self._semantic_storage.add_citations(f_id, citation_ids)
 
                 case SemanticCommandType.DELETE:
                     filter_expr = And(
@@ -474,6 +525,7 @@ class IngestionService:
         *,
         set_id: SetIdT,
         resources: InstanceOf[Resources],
+        llm_timeout_seconds: int,
     ) -> None:
         async def _consolidate_type(
             semantic_category: InstanceOf[SemanticCategory],
@@ -504,6 +556,7 @@ class IngestionService:
                         memories=section_features,
                         resources=resources,
                         semantic_category=semantic_category,
+                        llm_timeout_seconds=llm_timeout_seconds,
                     )
                     for section_features in consolidation_sections
                 ],
@@ -523,6 +576,7 @@ class IngestionService:
         memories: list[SemanticFeature],
         semantic_category: InstanceOf[SemanticCategory],
         resources: InstanceOf[Resources],
+        llm_timeout_seconds: int,
     ) -> None:
         logger.info(
             "Deduplicating %d features for set_id=%s, category=%s",
@@ -534,11 +588,23 @@ class IngestionService:
         original_tag = memories[0].tag if len(memories) > 0 else None
 
         try:
-            consolidate_resp = await llm_consolidate_features(
-                features=memories,
-                model=resources.language_model,
-                consolidate_prompt=semantic_category.prompt.consolidation_prompt,
+            consolidate_resp = await asyncio.wait_for(
+                llm_consolidate_features(
+                    features=memories,
+                    model=resources.language_model,
+                    consolidate_prompt=semantic_category.prompt.consolidation_prompt,
+                ),
+                timeout=llm_timeout_seconds,
             )
+        except TimeoutError:
+            logger.warning(
+                "LLM consolidation timed out after %ds for set_id=%s, category=%s; "
+                "skipping consolidation",
+                llm_timeout_seconds,
+                set_id,
+                semantic_category.name,
+            )
+            return
         except (ValueError, TypeError):
             logger.exception("Failed to update features while calling LLM")
             if self._debug_fail_loudly:

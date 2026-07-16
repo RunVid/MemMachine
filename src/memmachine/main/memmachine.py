@@ -262,6 +262,7 @@ class MemMachine:
         episode_entries: list[EpisodeEntry],
         *,
         target_memories: list[MemoryType] = ALL_MEMORY_TYPES,
+        semantic_isolation: list[IsolationType] | None = None,
     ) -> list[EpisodeIdT]:
         episode_storage = await self._resources.get_episode_storage()
         episodes = await episode_storage.add_episodes(
@@ -290,10 +291,16 @@ class MemMachine:
             semantic_session_manager = (
                 await self._resources.get_semantic_session_manager()
             )
+            memory_type = (
+                semantic_isolation
+                if semantic_isolation is not None
+                else ALL_ISOLATION_TYPES
+            )
             tasks.append(
                 semantic_session_manager.add_message(
                     episode_ids=episode_ids,
                     session_data=session_data,
+                    memory_type=memory_type,
                 )
             )
 

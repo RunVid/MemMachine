@@ -65,28 +65,46 @@ class _SessionData:
         return self.session_id_override if self.session_id_override else self.session_key
 
 
+def _normalize_metadata_id(value: object | None) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    value = value.strip()
+    if value == "":
+        return None
+    return value
+
+
+def _extract_raw_ids_from_messages(
+    messages: list,
+) -> tuple[str | None, str | None, str | None]:
+    """Extract scope IDs from the first message metadata without applying defaults."""
+    user_id: str | None = None
+    role_id: str | None = None
+    session_id: str | None = None
+
+    if messages and hasattr(messages[0], "metadata") and messages[0].metadata:
+        metadata = messages[0].metadata
+        user_id = _normalize_metadata_id(metadata.get("user_id"))
+        role_id = _normalize_metadata_id(metadata.get("role_id"))
+        session_id = _normalize_metadata_id(metadata.get("session_id"))
+
+    return user_id, role_id, session_id
+
+
 def _extract_ids_from_messages(
     messages: list, project_id: str
 ) -> tuple[str | None, str | None, str | None]:
     """
     Extract user_id, role_id, and session_id from message metadata.
-    
+
     If user_id is not provided in metadata, use project_id as user_id
     (assuming one user per project).
     """
-    user_id: str | None = None
-    role_id: str | None = None
-    session_id: str | None = None
+    user_id, role_id, session_id = _extract_raw_ids_from_messages(messages)
 
-    # Extract from first message's metadata (assuming all messages have consistent metadata)
-    if messages and hasattr(messages[0], "metadata") and messages[0].metadata:
-        metadata = messages[0].metadata
-        user_id = metadata.get("user_id")
-        role_id = metadata.get("role_id")
-        session_id = metadata.get("session_id")
-
-    # If user_id is not provided, use project_id as user_id (one user per project)
-    if user_id is None or user_id == "":
+    if user_id is None:
         user_id = project_id
         logger.debug(
             "user_id not provided in metadata, using project_id as user_id: %s",
@@ -104,14 +122,37 @@ def _extract_ids_from_messages(
     return user_id, role_id, session_id
 
 
+def _infer_semantic_isolation(
+    *,
+    role_id: str | None,
+    session_id: str | None,
+) -> list[IsolationType]:
+    """
+    Choose semantic isolation scopes from message metadata.
+
+    When role_id is present, queue only role semantic memory so profile prompts
+    are not triggered for agent-personality learning turns.
+    """
+    if role_id is not None:
+        return [IsolationType.ROLE]
+
+    isolation: list[IsolationType] = [IsolationType.USER]
+    if session_id is not None:
+        isolation.append(IsolationType.SESSION)
+    return isolation
+
+
 async def _add_messages_to(
     target_memories: list[MemoryTypeE],
     spec: AddMemoriesSpec,
     memmachine: MemMachine,
 ) -> list[AddMemoryResult]:
-    # Extract user_id, role_id, session_id from message metadata
-    # If user_id is not provided, use project_id as user_id (one user per project)
-    user_id, role_id, session_id = _extract_ids_from_messages(spec.messages, spec.project_id)
+    raw_user_id, role_id, session_id = _extract_raw_ids_from_messages(spec.messages)
+    user_id = raw_user_id or spec.project_id
+    semantic_isolation = _infer_semantic_isolation(
+        role_id=role_id,
+        session_id=session_id,
+    )
 
     episodes: list[EpisodeEntry] = [
         EpisodeEntry(
@@ -148,6 +189,9 @@ async def _add_messages_to(
         session_data=session_data,
         episode_entries=episodes,
         target_memories=target_memories,
+        semantic_isolation=semantic_isolation
+        if MemoryTypeE.Semantic in target_memories
+        else None,
     )
     logger.info(
         "Added %d episodes, returned %d episode_ids",

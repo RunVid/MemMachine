@@ -13,6 +13,7 @@ from memmachine.common.errors import (
     SessionNotFoundError,
 )
 from memmachine.main.memmachine import ALL_MEMORY_TYPES, MemoryType
+from memmachine.semantic_memory.semantic_session_manager import IsolationType
 from memmachine.server.api_v2.router import RestError, get_memmachine
 from memmachine.server.api_v2.service import _SessionData
 from memmachine.server.app import MemMachineAPI
@@ -276,6 +277,64 @@ def test_add_memories_episode_type_forwarded(client, mock_memmachine):
     assert len(episode_entries) == 2
     assert episode_entries[0].episode_type == EpisodeType.MESSAGE
     assert episode_entries[1].episode_type is None
+
+
+def test_add_memories_role_id_queues_role_semantic_only(client, mock_memmachine):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "types": ["semantic"],
+        "messages": [
+            {
+                "role": "user",
+                "content": "Be more casual from now on",
+                "metadata": {
+                    "user_id": "alice",
+                    "role_id": "agent-42",
+                    "session_id": "chat-1",
+                },
+            }
+        ],
+    }
+
+    mock_memmachine.add_episodes.return_value = ["ep-1"]
+
+    response = client.post("/api/v2/memories", json=payload)
+    assert response.status_code == 200
+
+    call_kwargs = mock_memmachine.add_episodes.call_args[1]
+    assert call_kwargs["semantic_isolation"] == [IsolationType.ROLE]
+
+
+def test_add_memories_without_role_id_keeps_user_session_isolation(
+    client, mock_memmachine
+):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "types": ["semantic"],
+        "messages": [
+            {
+                "role": "user",
+                "content": "My name is Alice",
+                "metadata": {
+                    "user_id": "alice",
+                    "session_id": "chat-1",
+                },
+            }
+        ],
+    }
+
+    mock_memmachine.add_episodes.return_value = ["ep-1"]
+
+    response = client.post("/api/v2/memories", json=payload)
+    assert response.status_code == 200
+
+    call_kwargs = mock_memmachine.add_episodes.call_args[1]
+    assert call_kwargs["semantic_isolation"] == [
+        IsolationType.USER,
+        IsolationType.SESSION,
+    ]
 
 
 def test_search_memories(client, mock_memmachine):

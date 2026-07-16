@@ -396,6 +396,10 @@ class RouterDoc:
     - If `types` only contains `"semantic"`, memories are added only to Semantic memory
     - If `types` contains both, memories are added to both types
 
+    When a message includes `role_id` in metadata and semantic memory is requested,
+    the message is queued only for role semantic prompts (`prompt.role`) and not for
+    user profile prompts (`prompt.profile`), even if `user_id` is also present.
+
     Each memory message represents a discrete piece of information to be stored
     in the project's memory system. Messages can include content, metadata,
     timestamps, and other contextual details.

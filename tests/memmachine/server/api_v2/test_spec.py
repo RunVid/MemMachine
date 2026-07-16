@@ -13,6 +13,8 @@ from memmachine.common.api.spec import (
     DeleteEpisodicMemorySpec,
     DeleteProjectSpec,
     DeleteSemanticMemorySpec,
+    WriteSemanticMemorySpec,
+    WriteSemanticMemoryResponse,
     InvalidNameError,
     ListMemoriesSpec,
     MemoryMessage,
@@ -228,6 +230,38 @@ def test_delete_semantic_memory_spec():
     assert spec.org_id == DEFAULT_ORG_AND_PROJECT_ID
     assert spec.project_id == DEFAULT_ORG_AND_PROJECT_ID
     assert spec.semantic_id == "sem-123"
+
+
+def test_write_semantic_memory_spec():
+    with pytest.raises(ValidationError) as exc_info:
+        WriteSemanticMemorySpec()
+    assert_pydantic_errors(
+        exc_info,
+        {"category": "missing", "tag": "missing", "feature_name": "missing", "value": "missing"},
+    )
+
+    spec = WriteSemanticMemorySpec(
+        category="agent_personality",
+        tag="tone",
+        feature_name="formality",
+        value="Professional but friendly",
+    )
+    assert spec.isolation.value == "user"
+    assert spec.user_id == ""
+
+    with pytest.raises(ValidationError) as exc_info:
+        WriteSemanticMemorySpec(
+            category="agent_personality",
+            tag="tone",
+            feature_name="formality",
+            value="Professional but friendly",
+            isolation="role",
+        )
+    assert "role_id is required" in str(exc_info.value)
+
+    response = WriteSemanticMemoryResponse(semantic_id="42", created=True)
+    assert response.semantic_id == "42"
+    assert response.created is True
 
 
 def test_get_semantic_ids():

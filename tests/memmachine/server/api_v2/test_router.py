@@ -500,6 +500,57 @@ def test_delete_semantic_memories_empty(client, mock_memmachine):
     assert "At least one semantic ID" in response_detail["message"]
 
 
+def test_write_semantic_memory(client, mock_memmachine):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "category": "agent_personality",
+        "tag": "tone",
+        "feature_name": "formality",
+        "value": "Professional but friendly",
+    }
+
+    mock_memmachine.write_semantic_feature.return_value = ("42", True)
+
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 200
+    assert response.json() == {"semantic_id": "42", "created": True}
+    mock_memmachine.write_semantic_feature.assert_awaited_once()
+
+    mock_memmachine.write_semantic_feature.reset_mock()
+    mock_memmachine.write_semantic_feature.return_value = ("42", False)
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 200
+    assert response.json()["created"] is False
+
+    mock_memmachine.write_semantic_feature.reset_mock()
+    mock_memmachine.write_semantic_feature.side_effect = ValueError("Invalid")
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 422
+    assert "invalid argument" in response.json()["detail"]["message"]
+
+    mock_memmachine.write_semantic_feature.reset_mock()
+    mock_memmachine.write_semantic_feature.side_effect = Exception("Error")
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 500
+    assert "Unable to write semantic memory" in response.json()["detail"]["message"]
+
+
+def test_write_semantic_memory_requires_role_id(client, mock_memmachine):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "category": "agent_personality",
+        "tag": "tone",
+        "feature_name": "formality",
+        "value": "Professional but friendly",
+        "isolation": "role",
+    }
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 422
+    assert "role_id is required" in response.json()["detail"][0]["msg"]
+
+
 def test_metrics(client):
     response = client.get("/api/v2/metrics")
     assert response.status_code == 200

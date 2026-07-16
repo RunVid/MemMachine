@@ -506,6 +506,33 @@ class MemMachine:
         semantic_session = await self._resources.get_semantic_session_manager()
         await semantic_session.delete_features(feature_ids)
 
+    async def write_semantic_feature(
+        self,
+        session_data: InstanceOf[SessionData],
+        *,
+        isolation: IsolationType,
+        category_name: str,
+        feature: str,
+        value: str,
+        tag: str,
+        metadata: dict[str, Any] | None = None,
+        citations: list[EpisodeIdT] | None = None,
+    ) -> tuple[FeatureIdT, bool]:
+        semantic_session = await self._resources.get_semantic_session_manager()
+        metadata_str: dict[str, str] | None = None
+        if metadata is not None:
+            metadata_str = {key: str(val) for key, val in metadata.items()}
+        return await semantic_session.upsert_feature(
+            session_data=session_data,
+            memory_type=isolation,
+            category_name=category_name,
+            feature=feature,
+            value=value,
+            tag=tag,
+            metadata=metadata_str,
+            citations=citations,
+        )
+
     async def trigger_consolidation(
         self,
         set_id: str,

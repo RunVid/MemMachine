@@ -297,6 +297,12 @@ class Examples:
     EPISODIC_IDS: ClassVar[list[list[str]]] = [["123", "345"], ["23"]]
     SEMANTIC_ID: ClassVar[list[str]] = ["12", "23"]
     SEMANTIC_IDS: ClassVar[list[list[str]]] = [["123", "345"], ["23"]]
+    WRITE_SEMANTIC_ISOLATION: ClassVar[list[str]] = ["user", "role", "session"]
+    WRITE_SEMANTIC_CATEGORY: ClassVar[list[str]] = ["profile", "agent_personality"]
+    WRITE_SEMANTIC_TAG: ClassVar[list[str]] = ["preferences", "tone"]
+    WRITE_SEMANTIC_FEATURE_NAME: ClassVar[list[str]] = ["language", "formality"]
+    WRITE_SEMANTIC_VALUE: ClassVar[list[str]] = ["Prefers Python over JavaScript"]
+    WRITE_SEMANTIC_CREATED: ClassVar[list[bool]] = [True, False]
     SEARCH_RESULT_STATUS: ClassVar[list[int]] = [0]
     SERVER_VERSION: ClassVar[list[str]] = ["0.1.2", "0.2.0"]
     CLIENT_VERSION: ClassVar[list[str]] = ["0.1.2", "0.2.0"]
@@ -431,6 +437,34 @@ class RouterDoc:
 
     If any of the specified episodic memories do not exist, a not-found error
     is returned for those entries.
+    """
+
+    WRITE_SEMANTIC_ISOLATION = """
+    Memory isolation scope for the semantic feature. `user` scopes to a user profile,
+    `role` scopes to an agent/role profile, and `session` scopes to a session."""
+
+    WRITE_SEMANTIC_USER_ID = """
+    User identifier for user-scoped semantic memory. Defaults to `project_id` when omitted."""
+
+    WRITE_SEMANTIC_ROLE_ID = """
+    Role or agent identifier. Required when `isolation` is `role`."""
+
+    WRITE_SEMANTIC_SESSION_ID = """
+    Session identifier. Required when `isolation` is `session`."""
+
+    WRITE_SEMANTIC_CREATED = """
+    Whether a new semantic feature row was created. `false` means an existing feature
+    with the same scope, category, tag, and feature name was updated."""
+
+    WRITE_SEMANTIC_MEMORY = """
+    Write a semantic memory feature directly, bypassing episodic storage and LLM ingestion.
+
+    The server embeds the provided value and upserts into semantic storage using
+    `(set_id, category, tag, feature_name)` as the identity key. Existing rows are
+    updated in place; new rows are inserted.
+
+    Use this endpoint for manual client edits or agent tool writes. Conversation-driven
+    extraction should continue to use `POST /memories`.
     """
 
     DELETE_SEMANTIC_MEMORY = """

@@ -17,7 +17,7 @@ import numpy as np
 from pydantic import BaseModel, InstanceOf
 
 from memmachine.common.episode_store import EpisodeIdT, EpisodeStorage
-from memmachine.common.filter.filter_parser import FilterExpr
+from memmachine.common.filter.filter_parser import And, Comparison, FilterExpr
 
 from .semantic_ingestion import IngestionService
 from .semantic_model import FeatureIdT, ResourceRetriever, SemanticFeature, SetIdT
@@ -180,6 +180,57 @@ class SemanticService:
             await self._semantic_storage.add_citations(f_id, citations)
 
         return f_id
+
+    async def upsert_feature(
+        self,
+        *,
+        set_id: SetIdT,
+        category_name: str,
+        feature: str,
+        value: str,
+        tag: str,
+        metadata: dict[str, Any] | None = None,
+        citations: list[EpisodeIdT] | None = None,
+    ) -> tuple[FeatureIdT, bool]:
+        filter_expr = And(
+            left=And(
+                left=Comparison(field="set_id", op="=", value=set_id),
+                right=Comparison(field="category_name", op="=", value=category_name),
+            ),
+            right=And(
+                left=Comparison(field="tag", op="=", value=tag),
+                right=Comparison(field="feature", op="=", value=feature),
+            ),
+        )
+        existing = await self._semantic_storage.get_feature_set(
+            filter_expr=filter_expr,
+            page_size=1,
+        )
+        if len(existing) > 0:
+            feature_id = existing[0].metadata.id
+            if feature_id is None:
+                raise ValueError("Existing semantic feature is missing an id")
+            await self.update_feature(
+                feature_id,
+                set_id=set_id,
+                category_name=category_name,
+                feature=feature,
+                value=value,
+                tag=tag,
+                metadata=metadata,
+            )
+            return feature_id, False
+
+        feature_id = await self.add_new_feature(
+            set_id=set_id,
+            category_name=category_name,
+            feature=feature,
+            value=value,
+            tag=tag,
+            metadata=metadata,
+            citations=citations,
+        )
+        return feature_id, True
 
     async def get_feature(
         self,

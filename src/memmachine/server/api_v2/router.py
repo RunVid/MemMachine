@@ -29,6 +29,8 @@ from memmachine.common.api.spec import (
     RestErrorModel,
     SearchMemoriesSpec,
     SearchResult,
+    WriteSemanticMemoryResponse,
+    WriteSemanticMemorySpec,
 )
 from memmachine.common.api.version import get_version
 from memmachine.common.configuration.episodic_config import (
@@ -49,6 +51,7 @@ from memmachine.server.api_v2.service import (
     _list_target_memories,
     _search_target_memories,
     _SessionData,
+    _write_semantic_memory,
     get_memmachine,
 )
 
@@ -353,6 +356,30 @@ async def delete_episodic_memory(
     except Exception as e:
         raise RestError(
             code=500, message="Unable to delete episodic memory", ex=e
+        ) from e
+
+
+@router.post(
+    "/memories/semantic",
+    description=RouterDoc.WRITE_SEMANTIC_MEMORY,
+)
+@router.post(
+    "/memories/semantic/add",
+    description=RouterDoc.WRITE_SEMANTIC_MEMORY,
+    include_in_schema=False,
+)
+async def write_semantic_memory(
+    spec: WriteSemanticMemorySpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> WriteSemanticMemoryResponse:
+    """Write semantic memory directly without ingestion."""
+    try:
+        return await _write_semantic_memory(spec=spec, memmachine=memmachine)
+    except ValueError as e:
+        raise RestError(code=422, message="invalid argument", ex=e) from e
+    except Exception as e:
+        raise RestError(
+            code=500, message="Unable to write semantic memory", ex=e
         ) from e
 
 

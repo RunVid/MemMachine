@@ -22,8 +22,12 @@ from memmachine.common.api.spec import (
     SearchResult,
     SearchResultContent,
     SemanticFeature,
+    SemanticIsolation,
+    WriteSemanticMemoryResponse,
+    WriteSemanticMemorySpec,
 )
 from memmachine.common.episode_store.episode_model import EpisodeEntry
+from memmachine.semantic_memory.semantic_session_manager import IsolationType
 
 
 # Placeholder dependency injection function
@@ -295,4 +299,48 @@ async def _consolidate_memories(
         consolidated=consolidated,
         lock_acquired=lock_acquired,
     )
+
+
+_SEMANTIC_ISOLATION_MAP: dict[SemanticIsolation, IsolationType] = {
+    SemanticIsolation.USER: IsolationType.USER,
+    SemanticIsolation.ROLE: IsolationType.ROLE,
+    SemanticIsolation.SESSION: IsolationType.SESSION,
+}
+
+
+def _resolve_semantic_scope_ids(
+    spec: WriteSemanticMemorySpec,
+) -> tuple[str | None, str | None, str | None]:
+    user_id = spec.user_id.strip() or None
+    role_id = spec.role_id.strip() or None
+    session_id = spec.session_id.strip() or None
+
+    if spec.isolation == SemanticIsolation.USER and user_id is None:
+        user_id = spec.project_id
+
+    return user_id, role_id, session_id
+
+
+async def _write_semantic_memory(
+    spec: WriteSemanticMemorySpec,
+    memmachine: MemMachine,
+) -> WriteSemanticMemoryResponse:
+    user_id, role_id, session_id = _resolve_semantic_scope_ids(spec)
+    session_data = _SessionData(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        user_id=user_id,
+        role_id=role_id,
+        session_id_override=session_id,
+    )
+    semantic_id, created = await memmachine.write_semantic_feature(
+        session_data=session_data,
+        isolation=_SEMANTIC_ISOLATION_MAP[spec.isolation],
+        category_name=spec.category,
+        feature=spec.feature_name,
+        value=spec.value,
+        tag=spec.tag,
+        metadata=spec.metadata,
+    )
+    return WriteSemanticMemoryResponse(semantic_id=semantic_id, created=created)
 

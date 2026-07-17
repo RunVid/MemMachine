@@ -761,19 +761,35 @@ class WriteSemanticMemorySpec(_WithOrgAndProj):
     ]
     tag: Annotated[
         str,
-        Field(..., description=SpecDoc.SEMANTIC_TAG, examples=Examples.WRITE_SEMANTIC_TAG),
+        Field(
+            default="",
+            description=SpecDoc.SEMANTIC_TAG,
+            examples=Examples.WRITE_SEMANTIC_TAG,
+        ),
     ]
     feature_name: Annotated[
         str,
         Field(
-            ...,
+            default="",
             description=SpecDoc.SEMANTIC_FEATURE_NAME,
             examples=Examples.WRITE_SEMANTIC_FEATURE_NAME,
         ),
     ]
     value: Annotated[
         str,
-        Field(..., description=SpecDoc.SEMANTIC_VALUE, examples=Examples.WRITE_SEMANTIC_VALUE),
+        Field(
+            default="",
+            description=SpecDoc.SEMANTIC_VALUE,
+            examples=Examples.WRITE_SEMANTIC_VALUE,
+        ),
+    ]
+    instruction: Annotated[
+        str,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_INSTRUCTION,
+            examples=Examples.WRITE_SEMANTIC_INSTRUCTION,
+        ),
     ]
     isolation: Annotated[
         SemanticIsolation,
@@ -818,6 +834,25 @@ class WriteSemanticMemorySpec(_WithOrgAndProj):
             raise ValueError("session_id is required when isolation is 'session'")
         return self
 
+    @model_validator(mode="after")
+    def validate_write_mode(self) -> Self:
+        """Ensure the request uses either structured fields or a free-form instruction."""
+        has_instruction = len(self.instruction.strip()) > 0
+        has_structured = all(
+            len(field.strip()) > 0
+            for field in (self.tag, self.feature_name, self.value)
+        )
+
+        if has_instruction and has_structured:
+            raise ValueError(
+                "Provide either instruction or tag, feature_name, and value, not both",
+            )
+        if not has_instruction and not has_structured:
+            raise ValueError(
+                "Provide either instruction or tag, feature_name, and value",
+            )
+        return self
+
 
 class WriteSemanticMemoryResponse(BaseModel):
     """Response model for direct semantic memory writes."""
@@ -833,6 +868,18 @@ class WriteSemanticMemoryResponse(BaseModel):
             description=SpecDoc.WRITE_SEMANTIC_CREATED,
             examples=Examples.WRITE_SEMANTIC_CREATED,
         ),
+    ]
+    tag: Annotated[
+        str,
+        Field(default="", description=SpecDoc.SEMANTIC_TAG),
+    ]
+    feature_name: Annotated[
+        str,
+        Field(default="", description=SpecDoc.SEMANTIC_FEATURE_NAME),
+    ]
+    value: Annotated[
+        str,
+        Field(default="", description=SpecDoc.SEMANTIC_VALUE),
     ]
 
 

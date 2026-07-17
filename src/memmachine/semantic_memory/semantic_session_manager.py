@@ -272,6 +272,48 @@ class SemanticSessionManager:
             citations=citations,
         )
 
+    async def validate_manual_write(
+        self,
+        session_data: SessionData,
+        *,
+        memory_type: IsolationType,
+        category_name: str,
+        feature: str,
+        value: str,
+        tag: str,
+    ) -> None:
+        set_ids = self._get_set_ids(session_data, [memory_type])
+        if len(set_ids) != 1:
+            raise ValueError("Invalid set_ids", set_ids)
+        set_id = set_ids[0]
+
+        await self._semantic_service.validate_manual_write(
+            set_id=set_id,
+            category_name=category_name,
+            feature=feature,
+            value=value,
+            tag=tag,
+        )
+
+    async def write_from_instruction(
+        self,
+        session_data: SessionData,
+        *,
+        memory_type: IsolationType,
+        category_name: str,
+        instruction: str,
+    ) -> tuple[str, str, str, FeatureIdT, bool]:
+        set_ids = self._get_set_ids(session_data, [memory_type])
+        if len(set_ids) != 1:
+            raise ValueError("Invalid set_ids", set_ids)
+        set_id = set_ids[0]
+
+        return await self._semantic_service.apply_manual_instruction(
+            set_id=set_id,
+            category_name=category_name,
+            instruction=instruction,
+        )
+
     async def get_feature(
         self,
         feature_id: FeatureIdT,

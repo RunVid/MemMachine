@@ -232,6 +232,106 @@ class SemanticService:
         )
         return feature_id, True
 
+    async def validate_manual_write(
+        self,
+        *,
+        set_id: SetIdT,
+        category_name: str,
+        feature: str,
+        value: str,
+        tag: str,
+    ) -> None:
+        from memmachine.semantic_memory.semantic_manual_write import (
+            find_manual_write_duplicate,
+            validate_manual_write_content,
+            validate_manual_write_tag,
+        )
+
+        validate_manual_write_tag(category_name=category_name, tag=tag)
+        validate_manual_write_content(category_name=category_name, value=value)
+
+        filter_expr = And(
+            left=Comparison(field="set_id", op="=", value=set_id),
+            right=Comparison(field="category_name", op="=", value=category_name),
+        )
+        existing_features = await self._semantic_storage.get_feature_set(
+            filter_expr=filter_expr,
+        )
+        duplicate_message = find_manual_write_duplicate(
+            existing_features=existing_features,
+            tag=tag,
+            feature_name=feature,
+            value=value,
+        )
+        if duplicate_message is not None:
+            raise ValueError(duplicate_message)
+
+    async def apply_manual_instruction(
+        self,
+        *,
+        set_id: SetIdT,
+        category_name: str,
+        instruction: str,
+    ) -> tuple[str, str, str, FeatureIdT, bool]:
+        from memmachine.semantic_memory.semantic_llm import llm_parse_manual_instruction
+        from memmachine.semantic_memory.semantic_manual_write import (
+            build_manual_instruction_system_prompt,
+            resolve_instruction_write_target,
+            validate_manual_write_tag,
+        )
+
+        normalized_instruction = instruction.strip()
+        if normalized_instruction == "":
+            raise ValueError("Instruction cannot be empty")
+
+        system_prompt = build_manual_instruction_system_prompt(
+            category_name=category_name,
+        )
+
+        filter_expr = And(
+            left=Comparison(field="set_id", op="=", value=set_id),
+            right=Comparison(field="category_name", op="=", value=category_name),
+        )
+        existing_features = await self._semantic_storage.get_feature_set(
+            filter_expr=filter_expr,
+        )
+
+        resources = self._resource_retriever.get_resources(set_id)
+        parsed = await llm_parse_manual_instruction(
+            instruction=normalized_instruction,
+            existing_features=existing_features,
+            model=resources.language_model,
+            system_prompt=system_prompt,
+        )
+        if not parsed.accepted:
+            raise ValueError(
+                parsed.rejection_reason or "Instruction rejected",
+            )
+
+        tag = parsed.tag.strip()
+        feature_name = parsed.feature_name.strip()
+        value = parsed.value.strip()
+        if tag == "" or feature_name == "" or value == "":
+            raise ValueError("Instruction could not be mapped to a valid semantic feature")
+
+        validate_manual_write_tag(category_name=category_name, tag=tag)
+
+        canonical_feature_name, canonical_value = resolve_instruction_write_target(
+            existing_features=existing_features,
+            tag=tag,
+            feature_name=feature_name,
+            value=value,
+        )
+
+        feature_id, created = await self.upsert_feature(
+            set_id=set_id,
+            category_name=category_name,
+            feature=canonical_feature_name,
+            value=canonical_value,
+            tag=tag,
+        )
+        return tag, canonical_feature_name, canonical_value, feature_id, created
+
     async def get_feature(
         self,
         feature_id: FeatureIdT,

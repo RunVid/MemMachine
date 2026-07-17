@@ -529,6 +529,14 @@ class MemMachine:
         metadata_str: dict[str, str] | None = None
         if metadata is not None:
             metadata_str = {key: str(val) for key, val in metadata.items()}
+        await semantic_session.validate_manual_write(
+            session_data=session_data,
+            memory_type=isolation,
+            category_name=category_name,
+            feature=feature,
+            value=value,
+            tag=tag,
+        )
         return await semantic_session.upsert_feature(
             session_data=session_data,
             memory_type=isolation,
@@ -538,6 +546,22 @@ class MemMachine:
             tag=tag,
             metadata=metadata_str,
             citations=citations,
+        )
+
+    async def write_semantic_from_instruction(
+        self,
+        session_data: InstanceOf[SessionData],
+        *,
+        isolation: IsolationType,
+        category_name: str,
+        instruction: str,
+    ) -> tuple[str, str, str, FeatureIdT, bool]:
+        semantic_session = await self._resources.get_semantic_session_manager()
+        return await semantic_session.write_from_instruction(
+            session_data=session_data,
+            memory_type=isolation,
+            category_name=category_name,
+            instruction=instruction,
         )
 
     async def trigger_consolidation(

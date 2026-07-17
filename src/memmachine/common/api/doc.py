@@ -302,6 +302,9 @@ class Examples:
     WRITE_SEMANTIC_TAG: ClassVar[list[str]] = ["preferences", "tone"]
     WRITE_SEMANTIC_FEATURE_NAME: ClassVar[list[str]] = ["language", "formality"]
     WRITE_SEMANTIC_VALUE: ClassVar[list[str]] = ["Prefers Python over JavaScript"]
+    WRITE_SEMANTIC_INSTRUCTION: ClassVar[list[str]] = [
+        "Be more casual and use bullet points",
+    ]
     WRITE_SEMANTIC_CREATED: ClassVar[list[bool]] = [True, False]
     SEARCH_RESULT_STATUS: ClassVar[list[int]] = [0]
     SERVER_VERSION: ClassVar[list[str]] = ["0.1.2", "0.2.0"]
@@ -460,12 +463,23 @@ class RouterDoc:
     Whether a new semantic feature row was created. `false` means an existing feature
     with the same scope, category, tag, and feature name was updated."""
 
+    WRITE_SEMANTIC_INSTRUCTION = """
+    Free-form instruction for semantic memory. When provided, the server validates the
+    instruction and uses an LLM to choose the tag, feature name, and stored value.
+    Do not provide tag, feature_name, or value in this mode."""
+
     WRITE_SEMANTIC_MEMORY = """
     Write a semantic memory feature directly, bypassing episodic storage and LLM ingestion.
 
-    The server embeds the provided value and upserts into semantic storage using
-    `(set_id, category, tag, feature_name)` as the identity key. Existing rows are
-    updated in place; new rows are inserted.
+    Provide either:
+    - Structured write: category, tag, feature_name, and value
+    - Instruction write: category and instruction (supported categories only)
+
+    Structured writes embed the value and upsert using
+    `(set_id, category, tag, feature_name)` as the identity key.
+
+    Instruction writes validate safety, map the instruction to the best tag/feature,
+    check for duplicates, then upsert.
 
     Use this endpoint for manual client edits or agent tool writes. Conversation-driven
     extraction should continue to use `POST /memories`.

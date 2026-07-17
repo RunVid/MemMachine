@@ -29,7 +29,8 @@ prompt:
     - task_assistant_prompt
     - life_context_prompt
   session: []
-  role: []
+  role:
+    - agent_personality_prompt
 
 resources:
   databases:

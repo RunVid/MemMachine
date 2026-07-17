@@ -564,35 +564,61 @@ def test_write_semantic_memory(client, mock_memmachine):
         "org_id": "test_org",
         "project_id": "test_proj",
         "category": "agent_personality",
-        "tag": "tone",
-        "feature_name": "formality",
-        "value": "Professional but friendly",
+        "instruction": "Be more casual and use bullet points",
+        "isolation": "role",
+        "role_id": "agent-42",
     }
 
-    mock_memmachine.write_semantic_feature.return_value = ("42", True)
+    mock_memmachine.write_semantic_from_instruction.return_value = (
+        "style",
+        "RESPONSE FORMAT",
+        "Use bullet points",
+        "42",
+        True,
+    )
 
     response = client.post("/api/v2/memories/semantic", json=payload)
     assert response.status_code == 200
-    assert response.json() == {"semantic_id": "42", "created": True}
-    mock_memmachine.write_semantic_feature.assert_awaited_once()
+    assert response.json() == {
+        "semantic_id": "42",
+        "created": True,
+        "tag": "style",
+        "feature_name": "RESPONSE FORMAT",
+        "value": "Use bullet points",
+    }
+    mock_memmachine.write_semantic_from_instruction.assert_awaited_once()
 
-    mock_memmachine.write_semantic_feature.reset_mock()
-    mock_memmachine.write_semantic_feature.return_value = ("42", False)
+    mock_memmachine.write_semantic_from_instruction.reset_mock()
+    mock_memmachine.write_semantic_from_instruction.side_effect = ValueError(
+        "Conflict: feature 'RESPONSE FORMAT' already exists in tag 'style'",
+    )
     response = client.post("/api/v2/memories/semantic", json=payload)
-    assert response.status_code == 200
-    assert response.json()["created"] is False
+    assert response.status_code == 422
+    assert "Conflict:" in response.json()["detail"]["internal_error"]
 
-    mock_memmachine.write_semantic_feature.reset_mock()
-    mock_memmachine.write_semantic_feature.side_effect = ValueError("Invalid")
+    mock_memmachine.write_semantic_from_instruction.reset_mock()
+    mock_memmachine.write_semantic_from_instruction.side_effect = ValueError("Invalid")
     response = client.post("/api/v2/memories/semantic", json=payload)
     assert response.status_code == 422
     assert "invalid argument" in response.json()["detail"]["message"]
 
-    mock_memmachine.write_semantic_feature.reset_mock()
-    mock_memmachine.write_semantic_feature.side_effect = Exception("Error")
+    mock_memmachine.write_semantic_from_instruction.reset_mock()
+    mock_memmachine.write_semantic_from_instruction.side_effect = Exception("Error")
     response = client.post("/api/v2/memories/semantic", json=payload)
     assert response.status_code == 500
     assert "Unable to write semantic memory" in response.json()["detail"]["message"]
+
+
+def test_write_semantic_memory_requires_instruction(client, mock_memmachine):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "category": "agent_personality",
+        "isolation": "role",
+        "role_id": "agent-42",
+    }
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 422
 
 
 def test_write_semantic_memory_requires_role_id(client, mock_memmachine):
@@ -600,9 +626,7 @@ def test_write_semantic_memory_requires_role_id(client, mock_memmachine):
         "org_id": "test_org",
         "project_id": "test_proj",
         "category": "agent_personality",
-        "tag": "tone",
-        "feature_name": "formality",
-        "value": "Professional but friendly",
+        "instruction": "Be more casual",
         "isolation": "role",
     }
     response = client.post("/api/v2/memories/semantic", json=payload)

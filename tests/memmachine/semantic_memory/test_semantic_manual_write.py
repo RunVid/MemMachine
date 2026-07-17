@@ -4,14 +4,12 @@ import pytest
 
 from memmachine.semantic_memory.semantic_manual_write import (
     build_manual_instruction_system_prompt,
-    find_manual_write_duplicate,
-    resolve_instruction_write_target,
+    validate_manual_write_append,
     validate_manual_write_content,
 )
 from memmachine.semantic_memory.semantic_model import SemanticFeature
 from memmachine.server.prompt.agent_personality_prompt import (
     MANUAL_INSTRUCTION_RULES,
-    SAFETY_RULES,
 )
 
 
@@ -32,58 +30,59 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert "persona" in prompt
     assert MANUAL_INSTRUCTION_RULES.strip() in prompt
     assert "Sexual or explicit adult content" in prompt
-    assert "merge into the existing feature" in prompt
+    assert "append-only" in prompt
 
 
 def test_validate_manual_write_content_uses_prompt_file_blocklist():
-    with pytest.raises(ValueError, match="disallowed"):
+    with pytest.raises(ValueError, match="Validation error:"):
         validate_manual_write_content(
             category_name="agent_personality",
             value="Use explicit sexual language",
         )
 
 
-def test_resolve_instruction_write_target_reuses_existing_feature_name():
+def test_validate_manual_write_append_rejects_existing_feature_name():
     existing = [_feature(tag="tone", feature_name="FORMALITY", value="Formal")]
 
-    feature_name, value = resolve_instruction_write_target(
+    error = validate_manual_write_append(
         existing_features=existing,
         tag="tone",
         feature_name="formality",
         value="Professional but friendly",
     )
 
-    assert feature_name == "FORMALITY"
-    assert value == "Professional but friendly"
+    assert error is not None
+    assert error.startswith("Conflict:")
+    assert "FORMALITY" in error
 
 
-def test_resolve_instruction_write_target_merges_duplicate_value():
+def test_validate_manual_write_append_rejects_duplicate_value():
     existing = [
         _feature(tag="style", feature_name="RESPONSE FORMAT", value="Use bullet points"),
     ]
 
-    feature_name, value = resolve_instruction_write_target(
+    error = validate_manual_write_append(
         existing_features=existing,
         tag="style",
         feature_name="BULLETS",
         value="Use bullet points",
     )
 
-    assert feature_name == "RESPONSE FORMAT"
-    assert value == "Use bullet points"
+    assert error is not None
+    assert error.startswith("Duplicate:")
+    assert "RESPONSE FORMAT" in error
 
 
-def test_find_manual_write_duplicate_still_detects_structured_conflicts():
+def test_validate_manual_write_append_allows_new_feature():
     existing = [
-        _feature(tag="tone", feature_name="FORMALITY", value="Professional but friendly"),
+        _feature(tag="tone", feature_name="FORMALITY", value="Formal"),
     ]
 
-    duplicate = find_manual_write_duplicate(
+    error = validate_manual_write_append(
         existing_features=existing,
         tag="tone",
         feature_name="WARMTH",
-        value="Professional but friendly",
+        value="Friendly and approachable",
     )
 
-    assert duplicate is not None
-    assert "FORMALITY" in duplicate
+    assert error is None

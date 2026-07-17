@@ -245,56 +245,6 @@ class SemanticSessionManager:
             citations=citations,
         )
 
-    async def upsert_feature(
-        self,
-        session_data: SessionData,
-        *,
-        memory_type: IsolationType,
-        category_name: str,
-        feature: str,
-        value: str,
-        tag: str,
-        metadata: dict[str, str] | None = None,
-        citations: list[EpisodeIdT] | None = None,
-    ) -> tuple[FeatureIdT, bool]:
-        set_ids = self._get_set_ids(session_data, [memory_type])
-        if len(set_ids) != 1:
-            raise ValueError("Invalid set_ids", set_ids)
-        set_id = set_ids[0]
-
-        return await self._semantic_service.upsert_feature(
-            set_id=set_id,
-            category_name=category_name,
-            feature=feature,
-            value=value,
-            tag=tag,
-            metadata=metadata,
-            citations=citations,
-        )
-
-    async def validate_manual_write(
-        self,
-        session_data: SessionData,
-        *,
-        memory_type: IsolationType,
-        category_name: str,
-        feature: str,
-        value: str,
-        tag: str,
-    ) -> None:
-        set_ids = self._get_set_ids(session_data, [memory_type])
-        if len(set_ids) != 1:
-            raise ValueError("Invalid set_ids", set_ids)
-        set_id = set_ids[0]
-
-        await self._semantic_service.validate_manual_write(
-            set_id=set_id,
-            category_name=category_name,
-            feature=feature,
-            value=value,
-            tag=tag,
-        )
-
     async def write_from_instruction(
         self,
         session_data: SessionData,

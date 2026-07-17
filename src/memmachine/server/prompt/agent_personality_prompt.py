@@ -36,17 +36,19 @@ MANUAL_WRITE_BLOCKED_CONTENT_PATTERNS: tuple[str, ...] = (
 MANUAL_INSTRUCTION_RULES = """
     ## INSTRUCTION WRITE RULES
 
+    - Manual writes are append-only: never update, merge, or reuse existing feature names
     - Map the instruction to exactly one best matching tag
-    - Pick a concise UPPERCASE feature name, or reuse an existing one when updating the same trait
+    - Pick a new concise UPPERCASE feature name for each accepted instruction
     - Store a short stable value describing the trait, not the raw instruction text
     - Compare carefully with existing features before deciding placement
 
     ## CONFLICT AND DUPLICATE HANDLING
 
-    - If the instruction updates an existing trait, reuse that feature's exact feature_name and return the updated merged value
-    - If the instruction overlaps or duplicates an existing feature (same meaning or same value under a different name), merge into the existing feature instead of creating a new one
-    - Reject only when the instruction is unrelated to this category or violates safety rules
-    - Do not reject merely because similar content already exists; merge instead
+    - Reject when the instruction would duplicate an existing value under the same tag
+    - Reject when the proposed feature name already exists under the same tag
+    - Reject when the instruction overlaps or conflicts with an existing trait in the same tag
+    - Set accepted=false and provide a clear rejection_reason for duplicates and conflicts
+    - Reject when the instruction is unrelated to this category or violates safety rules
 
     ## CATEGORY REJECTION
 

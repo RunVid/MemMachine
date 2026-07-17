@@ -618,37 +618,31 @@ class Memory:
             logger.info("Semantic memory %s deleted successfully", semantic_id)
             return True
 
-    def write_semantic(
+    def write_semantic_instruction(
         self,
         *,
         category: str,
-        tag: str,
-        feature_name: str,
-        value: str,
-        isolation: str = "user",
+        instruction: str,
+        isolation: str = "role",
         user_id: str = "",
         role_id: str = "",
         session_id: str = "",
-        metadata: dict[str, Any] | None = None,
         timeout: int | None = None,
     ) -> WriteSemanticMemoryResponse:
         """
-        Write semantic memory directly without ingestion.
+        Append semantic memory from a settings instruction.
 
         Args:
-            category: Semantic category name
-            tag: Tag within the category
-            feature_name: Feature key
-            value: Feature value (embedded server-side for search)
+            category: Semantic category name (e.g. `agent_personality`)
+            instruction: Free-form settings instruction
             isolation: Memory scope (`user`, `role`, or `session`)
             user_id: User identifier for user-scoped memory
             role_id: Role/agent identifier for role-scoped memory
             session_id: Session identifier for session-scoped memory
-            metadata: Optional metadata stored with the feature
             timeout: Request timeout in seconds (uses client default if not provided)
 
         Returns:
-            WriteSemanticMemoryResponse with semantic_id and created flag
+            WriteSemanticMemoryResponse with semantic_id, created, tag, feature_name, value
 
         Raises:
             requests.RequestException: If the request fails
@@ -662,14 +656,11 @@ class Memory:
             org_id=self.__org_id,
             project_id=self.__project_id,
             category=category,
-            tag=tag,
-            feature_name=feature_name,
-            value=value,
+            instruction=instruction,
             isolation=isolation,
             user_id=user_id,
             role_id=role_id,
             session_id=session_id,
-            metadata=metadata,
         )
         v2_data = spec.model_dump(mode="json", exclude_none=True)
 
@@ -683,7 +674,7 @@ class Memory:
             response.raise_for_status()
             return WriteSemanticMemoryResponse(**response.json())
         except Exception:
-            logger.exception("Failed to write semantic memory")
+            logger.exception("Failed to write semantic memory from instruction")
             raise
 
     def get_default_filter_dict(self) -> dict[str, str]:

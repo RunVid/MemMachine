@@ -460,29 +460,26 @@ class RouterDoc:
     Session identifier. Required when `isolation` is `session`."""
 
     WRITE_SEMANTIC_CREATED = """
-    Whether a new semantic feature row was created. `false` means an existing feature
-    with the same scope, category, tag, and feature name was updated."""
+    Whether a new semantic feature row was created. Manual writes are append-only, so
+    successful responses always return `true`. Failed duplicate or conflict checks return 422."""
 
     WRITE_SEMANTIC_INSTRUCTION = """
-    Free-form instruction for semantic memory. When provided, the server validates the
-    instruction and uses an LLM to choose the tag, feature name, and stored value.
-    Do not provide tag, feature_name, or value in this mode."""
+    Free-form settings instruction for semantic memory. The server validates the
+    instruction, maps it to tag/feature/value with an LLM, and appends a new feature.
+    Do not send tag, feature_name, or value from the settings UI."""
 
     WRITE_SEMANTIC_MEMORY = """
-    Write a semantic memory feature directly, bypassing episodic storage and LLM ingestion.
+    Append a semantic memory feature from a settings instruction, bypassing episodic
+    storage and async ingestion.
 
-    Provide either:
-    - Structured write: category, tag, feature_name, and value
-    - Instruction write: category and instruction (supported categories only)
+    Required fields: category and instruction. Optional scope fields select the memory
+    set via isolation (`user`, `role`, or `session`).
 
-    Structured writes embed the value and upsert using
-    `(set_id, category, tag, feature_name)` as the identity key.
+    The server validates safety and category fit, rejects duplicates and conflicts with
+    existing features, then appends a new row. It never updates existing features.
 
-    Instruction writes validate safety, map the instruction to the best tag/feature,
-    check for duplicates, then upsert.
-
-    Use this endpoint for manual client edits or agent tool writes. Conversation-driven
-    extraction should continue to use `POST /memories`.
+    Use this endpoint for settings-side persona edits. Conversation-driven extraction
+    should continue to use `POST /memories`.
     """
 
     DELETE_SEMANTIC_MEMORY = """

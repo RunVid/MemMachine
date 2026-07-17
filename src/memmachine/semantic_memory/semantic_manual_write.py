@@ -78,7 +78,7 @@ Return JSON:
   "value": "Professional but friendly"
 }}
 
-If rejected for safety, category mismatch, or irreconcilable conflict:
+If rejected for safety, category mismatch, duplicate, or conflict with existing features:
 {{
   "accepted": false,
   "rejection_reason": "reason",
@@ -99,7 +99,7 @@ def validate_manual_write_tag(*, category_name: str, tag: str) -> None:
     if normalized_tag not in allowed_tags:
         allowed = ", ".join(sorted(allowed_tags))
         raise ValueError(
-            f"Invalid tag '{tag}' for category '{category_name}'. "
+            f"Validation error: invalid tag '{tag}' for category '{category_name}'. "
             f"Allowed tags: {allowed}",
         )
 
@@ -107,22 +107,23 @@ def validate_manual_write_tag(*, category_name: str, tag: str) -> None:
 def validate_manual_write_content(*, category_name: str, value: str) -> None:
     normalized_value = value.strip()
     if normalized_value == "":
-        raise ValueError("Semantic memory value cannot be empty")
+        raise ValueError("Validation error: semantic memory value cannot be empty")
 
     for pattern in _compile_blocked_patterns(category_name):
         if pattern.search(normalized_value):
             raise ValueError(
-                "Semantic memory value contains disallowed sexual, violent, or illegal content",
+                "Validation error: value contains disallowed sexual, violent, or illegal content",
             )
 
 
-def find_manual_write_duplicate(
+def validate_manual_write_append(
     *,
     existing_features: list[SemanticFeature],
     tag: str,
     feature_name: str,
     value: str,
 ) -> str | None:
+    """Return an append conflict/duplicate message, or None if the write may proceed."""
     normalized_tag = tag.strip().lower()
     normalized_feature = normalize_manual_write_text(feature_name)
     normalized_value = normalize_manual_write_text(value)
@@ -135,41 +136,15 @@ def find_manual_write_duplicate(
         existing_value = normalize_manual_write_text(feature.value)
 
         if existing_feature == normalized_feature:
-            continue
+            return (
+                f"Conflict: feature '{feature.feature_name}' already exists "
+                f"in tag '{feature.tag}'"
+            )
 
         if existing_value == normalized_value:
             return (
-                f"Duplicate value already exists under feature "
+                f"Duplicate: value already exists under feature "
                 f"'{feature.feature_name}' in tag '{feature.tag}'"
             )
 
     return None
-
-
-def resolve_instruction_write_target(
-    *,
-    existing_features: list[SemanticFeature],
-    tag: str,
-    feature_name: str,
-    value: str,
-) -> tuple[str, str]:
-    """Return the canonical feature name and value for an instruction upsert."""
-    normalized_tag = tag.strip().lower()
-    normalized_feature = normalize_manual_write_text(feature_name)
-    normalized_value = normalize_manual_write_text(value)
-
-    for feature in existing_features:
-        if feature.tag.strip().lower() != normalized_tag:
-            continue
-        if normalize_manual_write_text(feature.feature_name) == normalized_feature:
-            return feature.feature_name, value
-
-    for feature in existing_features:
-        if feature.tag.strip().lower() != normalized_tag:
-            continue
-        if normalize_manual_write_text(feature.feature_name) == normalized_feature:
-            continue
-        if normalize_manual_write_text(feature.value) == normalized_value:
-            return feature.feature_name, value
-
-    return feature_name, value

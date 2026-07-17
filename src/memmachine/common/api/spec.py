@@ -753,40 +753,16 @@ class SemanticIsolation(str, Enum):
 
 
 class WriteSemanticMemorySpec(_WithOrgAndProj):
-    """Specification model for writing semantic memory directly."""
+    """Specification model for appending semantic memory from a settings instruction."""
 
     category: Annotated[
         str,
         Field(..., description=SpecDoc.SEMANTIC_CATEGORY, examples=Examples.WRITE_SEMANTIC_CATEGORY),
     ]
-    tag: Annotated[
-        str,
-        Field(
-            default="",
-            description=SpecDoc.SEMANTIC_TAG,
-            examples=Examples.WRITE_SEMANTIC_TAG,
-        ),
-    ]
-    feature_name: Annotated[
-        str,
-        Field(
-            default="",
-            description=SpecDoc.SEMANTIC_FEATURE_NAME,
-            examples=Examples.WRITE_SEMANTIC_FEATURE_NAME,
-        ),
-    ]
-    value: Annotated[
-        str,
-        Field(
-            default="",
-            description=SpecDoc.SEMANTIC_VALUE,
-            examples=Examples.WRITE_SEMANTIC_VALUE,
-        ),
-    ]
     instruction: Annotated[
         str,
         Field(
-            default="",
+            ...,
             description=SpecDoc.WRITE_SEMANTIC_INSTRUCTION,
             examples=Examples.WRITE_SEMANTIC_INSTRUCTION,
         ),
@@ -820,10 +796,6 @@ class WriteSemanticMemorySpec(_WithOrgAndProj):
             description=SpecDoc.WRITE_SEMANTIC_SESSION_ID,
         ),
     ]
-    metadata: Annotated[
-        dict[str, JsonValue] | None,
-        Field(default=None, description=SpecDoc.SEMANTIC_METADATA_OTHER),
-    ]
 
     @model_validator(mode="after")
     def validate_scope(self) -> Self:
@@ -835,22 +807,10 @@ class WriteSemanticMemorySpec(_WithOrgAndProj):
         return self
 
     @model_validator(mode="after")
-    def validate_write_mode(self) -> Self:
-        """Ensure the request uses either structured fields or a free-form instruction."""
-        has_instruction = len(self.instruction.strip()) > 0
-        has_structured = all(
-            len(field.strip()) > 0
-            for field in (self.tag, self.feature_name, self.value)
-        )
-
-        if has_instruction and has_structured:
-            raise ValueError(
-                "Provide either instruction or tag, feature_name, and value, not both",
-            )
-        if not has_instruction and not has_structured:
-            raise ValueError(
-                "Provide either instruction or tag, feature_name, and value",
-            )
+    def validate_instruction(self) -> Self:
+        """Ensure the settings instruction is non-empty."""
+        if not self.instruction.strip():
+            raise ValueError("instruction is required")
         return self
 
 

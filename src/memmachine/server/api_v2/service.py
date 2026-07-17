@@ -379,37 +379,19 @@ async def _write_semantic_memory(
     )
     isolation = _SEMANTIC_ISOLATION_MAP[spec.isolation]
 
-    if spec.instruction.strip():
-        tag, feature_name, value, semantic_id, created = (
-            await memmachine.write_semantic_from_instruction(
-                session_data=session_data,
-                isolation=isolation,
-                category_name=spec.category,
-                instruction=spec.instruction,
-            )
+    tag, feature_name, value, semantic_id, created = (
+        await memmachine.write_semantic_from_instruction(
+            session_data=session_data,
+            isolation=isolation,
+            category_name=spec.category,
+            instruction=spec.instruction,
         )
-        return WriteSemanticMemoryResponse(
-            semantic_id=semantic_id,
-            created=created,
-            tag=tag,
-            feature_name=feature_name,
-            value=value,
-        )
-
-    semantic_id, created = await memmachine.write_semantic_feature(
-        session_data=session_data,
-        isolation=isolation,
-        category_name=spec.category,
-        feature=spec.feature_name,
-        value=spec.value,
-        tag=spec.tag,
-        metadata=spec.metadata,
     )
     return WriteSemanticMemoryResponse(
         semantic_id=semantic_id,
         created=created,
-        tag=spec.tag,
-        feature_name=spec.feature_name,
-        value=spec.value,
+        tag=tag,
+        feature_name=feature_name,
+        value=value,
     )
 

@@ -237,27 +237,32 @@ def test_write_semantic_memory_spec():
         WriteSemanticMemorySpec()
     assert_pydantic_errors(
         exc_info,
-        {"category": "missing", "tag": "missing", "feature_name": "missing", "value": "missing"},
+        {"category": "missing", "instruction": "missing"},
     )
 
     spec = WriteSemanticMemorySpec(
         category="agent_personality",
-        tag="tone",
-        feature_name="formality",
-        value="Professional but friendly",
+        instruction="Be more casual and use bullet points",
+        isolation="role",
+        role_id="agent-42",
     )
-    assert spec.isolation.value == "user"
-    assert spec.user_id == ""
+    assert spec.isolation.value == "role"
+    assert spec.role_id == "agent-42"
 
     with pytest.raises(ValidationError) as exc_info:
         WriteSemanticMemorySpec(
             category="agent_personality",
-            tag="tone",
-            feature_name="formality",
-            value="Professional but friendly",
+            instruction="Be more casual",
             isolation="role",
         )
     assert "role_id is required" in str(exc_info.value)
+
+    with pytest.raises(ValidationError) as exc_info:
+        WriteSemanticMemorySpec(
+            category="agent_personality",
+            instruction="   ",
+        )
+    assert "instruction is required" in str(exc_info.value)
 
     response = WriteSemanticMemoryResponse(semantic_id="42", created=True)
     assert response.semantic_id == "42"

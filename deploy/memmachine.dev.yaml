@@ -56,10 +56,10 @@ services:
     profiles:
       - "memmachine-dev"
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     volumes:
-      - ./config/configuration_dev.yml:/app/configuration.yml:ro
+      - ../config/configuration_dev.yml:/app/configuration.yml:ro
     env_file:
       - ${LOCAL_ENV_DIR}/.env.agent1
       - ${LOCAL_ENV_DIR}/.env.memmachine

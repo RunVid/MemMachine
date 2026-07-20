@@ -459,6 +459,7 @@ def test_list_memories_with_role_id_queries_role_only(client, mock_memmachine):
     session_data = args.kwargs["session_data"]
     assert session_data.user_id is None
     assert session_data.role_id == "copilot"
+    assert session_data.role_profile_id == "agent1/user_123/copilot"
     assert args.kwargs["semantic_isolation"] == [IsolationType.ROLE]
 
 
@@ -616,6 +617,11 @@ def test_write_semantic_memory(client, mock_memmachine):
         "value": "Use bullet points",
     }
     mock_memmachine.write_semantic_from_instruction.assert_awaited_once()
+    write_session = mock_memmachine.write_semantic_from_instruction.await_args.kwargs[
+        "session_data"
+    ]
+    assert write_session.role_id == "agent-42"
+    assert write_session.role_profile_id == "test_org/test_proj/agent-42"
 
     mock_memmachine.write_semantic_from_instruction.reset_mock()
     mock_memmachine.write_semantic_from_instruction.side_effect = ValueError(

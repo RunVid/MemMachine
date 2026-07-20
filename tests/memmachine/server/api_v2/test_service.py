@@ -56,6 +56,24 @@ def test_resolve_list_semantic_scope_role_only():
     assert isolation == [IsolationType.ROLE]
 
 
+def test_session_data_role_profile_id_is_project_scoped():
+    from memmachine.server.api_v2.service import _SessionData
+
+    a = _SessionData(
+        org_id="agent1",
+        project_id="user_a",
+        role_id="copilot",
+    )
+    b = _SessionData(
+        org_id="agent1",
+        project_id="user_b",
+        role_id="copilot",
+    )
+    assert a.role_profile_id == "agent1/user_a/copilot"
+    assert b.role_profile_id == "agent1/user_b/copilot"
+    assert a.role_profile_id != b.role_profile_id
+
+
 def test_resolve_list_semantic_scope_default_user_and_session():
     spec = ListMemoriesSpec(
         org_id="agent1",

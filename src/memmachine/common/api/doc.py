@@ -248,7 +248,8 @@ class SpecDoc:
 
     WRITE_SEMANTIC_ROLE_ID = """
     Role or agent identifier. Required when `isolation` is `role`.
-    For list requests, when provided, only memories in `mem_role_<role_id>` are returned."""
+    For list requests, when provided, only memories in
+    `mem_role_<org_id>/<project_id>/<role_id>` are returned."""
 
     WRITE_SEMANTIC_SESSION_ID = """
     Session identifier. Required when `isolation` is `session`."""
@@ -457,7 +458,8 @@ class RouterDoc:
     The type field allows specifying which memory type to list.
 
     For semantic memory, optional scope fields select which set_ids to query:
-    - If `role_id` is provided, only that role set (`mem_role_<role_id>`) is listed.
+    - If `role_id` is provided, only that project-scoped role set
+      (`mem_role_<org_id>/<project_id>/<role_id>`) is listed.
     - Otherwise the default is user profile (`project_id`) plus the project session.
     """
 

@@ -56,9 +56,12 @@ class _SessionData:
 
     @property
     def role_profile_id(self) -> str | None:
-        # Return role_id without prefix - SemanticSessionManager._generate_session_data
-        # will add the "mem_role_" prefix automatically
-        return self.role_id
+        # Scope role sets by org/project so the same role_id (e.g. "copilot") does not
+        # share features across projects. SemanticSessionManager prefixes mem_role_.
+        # Final set_id: mem_role_{org_id}/{project_id}/{role_id}
+        if self.role_id is None:
+            return None
+        return f"{self.org_id}/{self.project_id}/{self.role_id}"
 
     @property
     def session_id(self) -> str | None:
@@ -253,8 +256,9 @@ def _resolve_list_semantic_scope(
     """
     Resolve list session IDs and semantic isolation scopes.
 
-    When role_id is provided, query only that role set (mem_role_*).
-    Otherwise keep the previous default: user=project_id + project session.
+    When role_id is provided, query only that project-scoped role set
+    (mem_role_<org>/<project>/<role_id>). Otherwise keep the previous default:
+    user=project_id + project session.
     """
     role_id = spec.role_id.strip() or None
     if role_id is not None:

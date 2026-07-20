@@ -239,6 +239,28 @@ class SpecDoc:
     SEMANTIC_IDS = """
     A list of unique IDs of semantic memories."""
 
+    WRITE_SEMANTIC_ISOLATION = """
+    Memory isolation scope for the semantic feature. `user` scopes to a user profile,
+    `role` scopes to an agent/role profile, and `session` scopes to a session."""
+
+    WRITE_SEMANTIC_USER_ID = """
+    User identifier for user-scoped semantic memory. Defaults to `project_id` when omitted."""
+
+    WRITE_SEMANTIC_ROLE_ID = """
+    Role or agent identifier. Required when `isolation` is `role`."""
+
+    WRITE_SEMANTIC_SESSION_ID = """
+    Session identifier. Required when `isolation` is `session`."""
+
+    WRITE_SEMANTIC_CREATED = """
+    Whether a new semantic feature row was created. Manual writes are append-only, so
+    successful responses always return `true`. Failed duplicate or conflict checks return 422."""
+
+    WRITE_SEMANTIC_INSTRUCTION = """
+    Free-form settings instruction for semantic memory. The server validates the
+    instruction, maps it to tag/feature/value with an LLM, and appends a new feature.
+    Do not send tag, feature_name, or value from the settings UI."""
+
     STATUS = """
     The status code of the search operation. 0 typically indicates success.
     """

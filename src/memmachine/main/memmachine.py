@@ -415,8 +415,12 @@ class MemMachine:
         search_filter: str | None = None,
         page_size: int | None = None,
         page_num: int | None = None,
+        semantic_isolation: list[IsolationType] | None = None,
     ) -> ListResults:
         search_filter_expr = parse_filter(search_filter) if search_filter else None
+        isolation = (
+            semantic_isolation if semantic_isolation is not None else ALL_ISOLATION_TYPES
+        )
 
         episodic_task: Task | None = None
         semantic_task: Task | None = None
@@ -445,6 +449,7 @@ class MemMachine:
             semantic_task = asyncio.create_task(
                 semantic_session.get_set_features(
                     session_data=session_data,
+                    memory_type=isolation,
                     search_filter=search_filter_expr,
                     page_size=page_size,
                     page_num=page_num,

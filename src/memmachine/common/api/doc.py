@@ -247,7 +247,8 @@ class SpecDoc:
     User identifier for user-scoped semantic memory. Defaults to `project_id` when omitted."""
 
     WRITE_SEMANTIC_ROLE_ID = """
-    Role or agent identifier. Required when `isolation` is `role`."""
+    Role or agent identifier. Required when `isolation` is `role`.
+    For list requests, when provided, only memories in `mem_role_<role_id>` are returned."""
 
     WRITE_SEMANTIC_SESSION_ID = """
     Session identifier. Required when `isolation` is `session`."""
@@ -454,6 +455,10 @@ class RouterDoc:
 
     The filter field allows for filtering based on metadata key-value pairs.
     The type field allows specifying which memory type to list.
+
+    For semantic memory, optional scope fields select which set_ids to query:
+    - If `role_id` is provided, only that role set (`mem_role_<role_id>`) is listed.
+    - Otherwise the default is user profile (`project_id`) plus the project session.
     """
 
     DELETE_EPISODIC_MEMORY = """

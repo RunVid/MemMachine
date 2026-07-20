@@ -703,6 +703,27 @@ class ListMemoriesSpec(_WithOrgAndProj):
             examples=Examples.MEMORY_TYPE_SINGLE,
         ),
     ]
+    user_id: Annotated[
+        SafeId,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_USER_ID,
+        ),
+    ]
+    role_id: Annotated[
+        SafeId,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_ROLE_ID,
+        ),
+    ]
+    session_id: Annotated[
+        SafeId,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_SESSION_ID,
+        ),
+    ]
 
 
 class DeleteEpisodicMemorySpec(_WithOrgAndProj):

@@ -431,6 +431,35 @@ def test_list_memories(client, mock_memmachine):
     assert "semantic_memory" not in data["content"]
 
     mock_memmachine.list_search.assert_awaited_once()
+    kwargs = mock_memmachine.list_search.await_args.kwargs
+    assert kwargs["semantic_isolation"] == [
+        IsolationType.USER,
+        IsolationType.SESSION,
+    ]
+
+
+def test_list_memories_with_role_id_queries_role_only(client, mock_memmachine):
+    payload = {
+        "org_id": "agent1",
+        "project_id": "user_123",
+        "type": "semantic",
+        "role_id": "copilot",
+    }
+
+    mock_results = MagicMock()
+    mock_results.episodic_memory = None
+    mock_results.semantic_memory = []
+    mock_memmachine.list_search.return_value = mock_results
+
+    response = client.post("/api/v2/memories/list", json=payload)
+    assert response.status_code == 200
+
+    mock_memmachine.list_search.assert_awaited_once()
+    args = mock_memmachine.list_search.await_args
+    session_data = args.kwargs["session_data"]
+    assert session_data.user_id is None
+    assert session_data.role_id == "copilot"
+    assert args.kwargs["semantic_isolation"] == [IsolationType.ROLE]
 
 
 def test_delete_episodic_memory(client, mock_memmachine):

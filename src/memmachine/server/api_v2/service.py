@@ -247,16 +247,32 @@ async def _search_target_memories(
     )
 
 
+def _resolve_list_semantic_scope(
+    spec: ListMemoriesSpec,
+) -> tuple[str | None, str | None, str | None, list[IsolationType]]:
+    """
+    Resolve list session IDs and semantic isolation scopes.
+
+    When role_id is provided, query only that role set (mem_role_*).
+    Otherwise keep the previous default: user=project_id + project session.
+    """
+    role_id = spec.role_id.strip() or None
+    if role_id is not None:
+        return None, role_id, None, [IsolationType.ROLE]
+
+    user_id = spec.user_id.strip() or spec.project_id
+    session_id = spec.session_id.strip() or None
+    return user_id, None, session_id, [IsolationType.USER, IsolationType.SESSION]
+
+
 async def _list_target_memories(
     target_memories: list[MemoryTypeE],
     spec: ListMemoriesSpec,
     memmachine: MemMachine,
 ) -> ListResult:
-    # For list, use project_id as user_id (one user per project)
-    # This ensures semantic memory list targets the correct user profile
-    user_id: str | None = spec.project_id
-    role_id: str | None = None
-    session_id: str | None = None
+    user_id, role_id, session_id, semantic_isolation = _resolve_list_semantic_scope(
+        spec
+    )
 
     results = await memmachine.list_search(
         session_data=_SessionData(
@@ -270,6 +286,7 @@ async def _list_target_memories(
         search_filter=spec.filter,
         page_size=spec.page_size,
         page_num=spec.page_num,
+        semantic_isolation=semantic_isolation,
     )
 
     content = ListResultContent(

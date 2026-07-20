@@ -4,8 +4,9 @@ from memmachine.semantic_memory.semantic_session_manager import IsolationType
 from memmachine.server.api_v2.service import (
     _infer_semantic_isolation,
     _extract_raw_ids_from_messages,
+    _resolve_list_semantic_scope,
 )
-from memmachine.common.api.spec import MemoryMessage
+from memmachine.common.api.spec import ListMemoriesSpec, MemoryMessage
 
 
 def test_infer_semantic_isolation_role_only():
@@ -40,3 +41,28 @@ def test_extract_raw_ids_from_messages():
 
     empty_metadata = MemoryMessage(content="hello", metadata={})
     assert _extract_raw_ids_from_messages([empty_metadata]) == (None, None, None)
+
+
+def test_resolve_list_semantic_scope_role_only():
+    spec = ListMemoriesSpec(
+        org_id="agent1",
+        project_id="user_123",
+        role_id="copilot",
+    )
+    user_id, role_id, session_id, isolation = _resolve_list_semantic_scope(spec)
+    assert user_id is None
+    assert role_id == "copilot"
+    assert session_id is None
+    assert isolation == [IsolationType.ROLE]
+
+
+def test_resolve_list_semantic_scope_default_user_and_session():
+    spec = ListMemoriesSpec(
+        org_id="agent1",
+        project_id="user_123",
+    )
+    user_id, role_id, session_id, isolation = _resolve_list_semantic_scope(spec)
+    assert user_id == "user_123"
+    assert role_id is None
+    assert session_id is None
+    assert isolation == [IsolationType.USER, IsolationType.SESSION]

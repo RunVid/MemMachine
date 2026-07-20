@@ -210,6 +210,9 @@ def test_list_memories_spec():
     assert spec.page_num == 0
     assert spec.filter == ""
     assert spec.type is None
+    assert spec.user_id == ""
+    assert spec.role_id == ""
+    assert spec.session_id == ""
 
 
 def test_delete_episodic_memory_spec():

@@ -19,6 +19,7 @@ from memmachine.semantic_memory.semantic_model import (
     Resources,
     SemanticCategory,
     SemanticCommand,
+    SemanticCommandType,
     SemanticFeature,
     SemanticPrompt,
 )
@@ -484,3 +485,30 @@ async def test_deduplicate_features_merges_and_relabels(
     assert consolidated.metadata.citations is not None
     assert list(consolidated.metadata.citations) == [drop_history]
     assert resources.embedder.ingest_calls == [["consolidated pizza"]]
+
+
+def test_normalize_command_tags_agent_personality():
+    service = object.__new__(IngestionService)
+    commands = [
+        SemanticCommand(
+            command=SemanticCommandType.ADD,
+            feature="FORMALITY",
+            tag="Tone",
+            value="Formal",
+        ),
+        SemanticCommand(
+            command=SemanticCommandType.ADD,
+            feature="WEIRD",
+            tag="not_a_real_tag",
+            value="Something",
+        ),
+    ]
+
+    service._normalize_command_tags(
+        commands,
+        "agent_personality",
+        set_id="mem_role_test",
+    )
+
+    assert commands[0].tag == "tone"
+    assert commands[1].tag == "style"

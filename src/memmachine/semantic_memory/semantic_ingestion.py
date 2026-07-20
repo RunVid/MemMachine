@@ -398,11 +398,20 @@ class IngestionService:
                 "life_situation",
                 "general_preference",
             }
+        elif category_name == "agent_personality":
+            valid_tags = {
+                "tone",
+                "persona",
+                "style",
+                "boundaries",
+            }
         else:
             return features
 
         original_count = len(features)
-        filtered = [feature for feature in features if feature.tag in valid_tags]
+        filtered = [
+            feature for feature in features if feature.tag.lower().strip() in valid_tags
+        ]
         filtered_count = original_count - len(filtered)
         if filtered_count > 0:
             logger.info(
@@ -444,6 +453,14 @@ class IngestionService:
                 "general_preference",
             }
             default_tag = "interests"
+        elif category_name == "agent_personality":
+            valid_tags = {
+                "tone",
+                "persona",
+                "style",
+                "boundaries",
+            }
+            default_tag = "style"
         else:
             return
 

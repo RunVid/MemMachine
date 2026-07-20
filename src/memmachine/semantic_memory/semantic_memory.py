@@ -236,9 +236,9 @@ class SemanticService:
         from memmachine.semantic_memory.semantic_llm import llm_parse_manual_instruction
         from memmachine.semantic_memory.semantic_manual_write import (
             build_manual_instruction_system_prompt,
+            normalize_manual_write_tag,
             validate_manual_write_append,
             validate_manual_write_content,
-            validate_manual_write_tag,
         )
 
         normalized_instruction = instruction.strip()
@@ -270,15 +270,17 @@ class SemanticService:
                 reason = f"Conflict: {reason}"
             raise ValueError(reason)
 
-        tag = parsed.tag.strip()
         feature_name = parsed.feature_name.strip()
         value = parsed.value.strip()
-        if tag == "" or feature_name == "" or value == "":
+        if parsed.tag.strip() == "" or feature_name == "" or value == "":
             raise ValueError(
                 "Validation error: instruction could not be mapped to a valid semantic feature",
             )
 
-        validate_manual_write_tag(category_name=category_name, tag=tag)
+        tag = normalize_manual_write_tag(
+            category_name=category_name,
+            tag=parsed.tag,
+        )
         validate_manual_write_content(category_name=category_name, value=value)
 
         append_error = validate_manual_write_append(

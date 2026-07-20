@@ -100,17 +100,25 @@ Choose exactly one best tag from: {allowed}
 """
 
 
-def validate_manual_write_tag(*, category_name: str, tag: str) -> None:
+def normalize_manual_write_tag(*, category_name: str, tag: str) -> str:
+    """Lowercase tag; map unknown agent_personality tags to default `style`."""
     allowed_tags = get_allowed_tags_for_category(category_name)
-    if allowed_tags is None:
-        return
     normalized_tag = tag.strip().lower()
-    if normalized_tag not in allowed_tags:
-        allowed = ", ".join(sorted(allowed_tags))
-        raise ValueError(
-            f"Validation error: invalid tag '{tag}' for category '{category_name}'. "
-            f"Allowed tags: {allowed}",
-        )
+    if allowed_tags is None:
+        return normalized_tag
+    if normalized_tag in allowed_tags:
+        return normalized_tag
+    if category_name == "agent_personality":
+        return "style"
+    allowed = ", ".join(sorted(allowed_tags))
+    raise ValueError(
+        f"Validation error: invalid tag '{tag}' for category '{category_name}'. "
+        f"Allowed tags: {allowed}",
+    )
+
+
+def validate_manual_write_tag(*, category_name: str, tag: str) -> None:
+    normalize_manual_write_tag(category_name=category_name, tag=tag)
 
 
 def validate_manual_write_content(*, category_name: str, value: str) -> None:

@@ -4,6 +4,7 @@ import pytest
 
 from memmachine.semantic_memory.semantic_manual_write import (
     build_manual_instruction_system_prompt,
+    normalize_manual_write_tag,
     validate_manual_write_append,
     validate_manual_write_content,
 )
@@ -89,3 +90,20 @@ def test_validate_manual_write_append_allows_new_feature():
     )
 
     assert error is None
+
+
+def test_normalize_manual_write_tag_lowercases_valid_tag():
+    assert (
+        normalize_manual_write_tag(category_name="agent_personality", tag=" Persona ")
+        == "persona"
+    )
+
+
+def test_normalize_manual_write_tag_defaults_unknown_to_style():
+    assert (
+        normalize_manual_write_tag(
+            category_name="agent_personality",
+            tag="completely_unrelated",
+        )
+        == "style"
+    )

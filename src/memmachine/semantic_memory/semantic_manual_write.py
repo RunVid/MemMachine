@@ -87,7 +87,18 @@ Return JSON when accepted (boundaries / scope example):
   "value": "Only notify about emails related to Pine tasks"
 }}
 
-If rejected for safety, category mismatch, duplicate, or conflict with existing features:
+If a related boundaries rule already exists, still accept with a NEW feature_name
+(append-only; do not reject as conflict):
+{{
+  "accepted": true,
+  "rejection_reason": "",
+  "tag": "boundaries",
+  "feature_name": "NOTIFICATION_SCOPE SENDER",
+  "value": "Also notify about emails from Mike"
+}}
+
+Reject ONLY for safety, unrelated category, exact duplicate value, or mutually
+exclusive conflict with an existing rule:
 {{
   "accepted": false,
   "rejection_reason": "reason",

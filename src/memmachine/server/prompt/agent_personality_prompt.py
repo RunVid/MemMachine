@@ -87,12 +87,20 @@ MANUAL_INSTRUCTION_RULES = """
 
     ## CONFLICT AND DUPLICATE HANDLING
 
-    - Reject only when the new instruction semantically conflicts with an existing rule,
-      or exactly duplicates an existing value
-    - Reusing / colliding with an existing feature_name is NOT a conflict — pick a new name
-      and append instead
-    - Do NOT merge or overwrite existing features on manual write
-    - Set accepted=false with a clear rejection_reason for true conflicts / duplicates
+    Default: ACCEPT and APPEND with a new feature_name.
+    Related / additional rules on a similar topic are NOT conflicts — append them.
+
+    Reject (accepted=false) ONLY when:
+    - the new value is an exact duplicate of an existing value, OR
+    - the new rule and an existing rule are mutually exclusive (cannot both be true)
+
+    NOT a conflict (must accept + append with a new name):
+    - existing notify/filter rule + another notify/filter criterion that can coexist
+    - same topic area but different criteria that do not cancel each other
+    - feature_name would collide — invent a new name and append
+
+    Do NOT merge or overwrite. Do NOT reject merely because a notification/scope
+    feature already exists.
 
     ## CATEGORY REJECTION
 

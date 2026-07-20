@@ -32,7 +32,7 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert MANUAL_INSTRUCTION_RULES.strip() in prompt
     assert "Sexual or explicit adult content" in prompt
     assert "append-only" in prompt
-    assert "Reusing / colliding with an existing feature_name is NOT a conflict" in prompt
+    assert "Related / additional rules on a similar topic are NOT conflicts" in prompt
     assert "Do NOT reject for lacking a personality trait" in prompt
 
 

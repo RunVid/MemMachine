@@ -32,13 +32,13 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert "persona" in prompt
     assert MANUAL_INSTRUCTION_RULES.strip() in prompt
     assert "Sexual or explicit adult content" in prompt
-    assert "DECISION ORDER" in prompt
-    assert "CLEAR LOGICAL CONFLICT" in prompt
-    assert "Scope is NEVER a conflict" in prompt
-    assert "distinguishing suffix" in prompt
+    assert "STAGE A" in prompt
+    assert "STAGE B" in prompt
+    assert "default: NO CONFLICT" in prompt
+    assert "Notify about emails from Alice" in prompt
     assert "Notify about emails from Peter" in prompt
-    assert "Notify about emails related to Pine tasks" in prompt
-    assert "Extending scope" in prompt
+    assert "MUST ACCEPT" in prompt
+    assert "distinguishing suffix" in prompt
 
 
 def test_validate_manual_write_content_uses_prompt_file_blocklist():

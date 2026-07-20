@@ -69,14 +69,13 @@ Allowed tags:
 
 {safety_rules}
 
-Accept example (existing NOTIFICATION_SCOPE="Notify about emails from Peter";
-extend scope with a NEW feature — not a conflict):
+Accept example (STAGE B default — existing Alice, new Peter; NOT a conflict):
 {{
   "accepted": true,
   "rejection_reason": "",
   "tag": "boundaries",
-  "feature_name": "NOTIFICATION SCOPE PINE TASKS",
-  "value": "Notify about emails related to Pine tasks"
+  "feature_name": "NOTIFICATION SCOPE PETER",
+  "value": "Notify about emails from Peter"
 }}
 
 Reject example:

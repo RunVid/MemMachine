@@ -82,40 +82,46 @@ SAME_TOPIC_WRITE_RULES = """
 """
 
 MANUAL_INSTRUCTION_RULES = """
-    ## DECISION ORDER (follow in order)
+    ## STAGE A — FILTER (do these first; stop if reject)
 
-    1) SAFETY — if the instruction is sexual / violent / illegal (see SAFETY),
-       reject (accepted=false). Stop.
+    1) SAFETY: sexual / violent / illegal → reject (see SAFETY).
+    2) DUPLICATE: same meaning/text as an existing value → reject.
+    3) Not an agent behavior/preference (user personal facts, one-off tasks,
+       unrelated) → reject.
 
-    2) DUPLICATE — if the instruction matches an existing value (same meaning /
-       same text), reject as duplicate. Stop.
+    If STAGE A passes, go to STAGE B. Do not invent conflicts in STAGE A.
 
-    3) CLEAR LOGICAL CONFLICT — reject ONLY when the NEW instruction itself uses
-       exclusive "only" / cancel language that cannot coexist with an existing
-       VALUE. Scope is NEVER a conflict: NOTIFICATION_SCOPE / "Notify about
-       emails from …" means INCLUDE. Extending scope → always ACCEPT; append a
-       NEW feature_name with a distinguishing suffix (never reuse the existing
-       name; never invent "only" on the existing value).
-       Example (must ACCEPT):
-       - existing NOTIFICATION_SCOPE="Notify about emails from Peter"
-         + "Notify about emails related to Pine tasks"
-         → feature_name="NOTIFICATION SCOPE PINE TASKS" (suffix),
-           value="Notify about emails related to Pine tasks"
-       - existing Peter + "Notify about emails from Mike"
-         → feature_name="NOTIFICATION SCOPE MIKE" (suffix)
+    ## STAGE B — CONFLICT CHECK (default: NO CONFLICT)
 
-    4) ACCEPT and APPEND — map to one tag, NEW feature_name with suffix if needed,
-       short stable value. Never merge or overwrite existing rows.
+    Default answer: NOT a conflict → ACCEPT and APPEND.
+    Two notify/include rules can always coexist. Different people or topics are
+    NOT conflicts. Do not invent exclusive "only".
 
-    Reject if the instruction is not an agent behavior / preference setting
-    (e.g. user personal facts, one-off tasks, unrelated content).
+    MUST ACCEPT (not conflict) — append NEW feature_name with a suffix:
+    - existing feature=NOTIFICATION_SCOPE,
+      value="Notify about emails from Alice"
+      + "Notify about emails from Peter"
+      → ACCEPT; feature_name="NOTIFICATION SCOPE PETER",
+        value="Notify about emails from Peter"
+    - existing feature=NOTIFICATION_SCOPE,
+      value="Notify about emails from Peter"
+      + "Notify about emails related to Pine tasks"
+      → ACCEPT; feature_name="NOTIFICATION SCOPE PINE TASKS",
+        value="Notify about emails related to Pine tasks"
+    - existing feature=NOTIFICATION SCOPE,
+      value="Notify about emails from Alice"
+      + "Notify about emails from Peter"
+      → ACCEPT (no "only" in either value → never conflict)
 
-    ## OUTPUT SHAPE
+    Reject in STAGE B ONLY if NEW literally says exclusive "only" / cancel
+    language that cannot coexist with an existing value.
 
-    - One best tag: tone | persona | style | boundaries
-    - NEW concise UPPERCASE feature_name; always add a distinguishing suffix
-      when related to an existing name (e.g. NOTIFICATION SCOPE →
-      NOTIFICATION SCOPE PINE TASKS). Never reuse an existing feature_name.
+    ## STAGE C — WRITE (when accepted)
+
+    - Append-only: never merge or overwrite
+    - One tag: tone | persona | style | boundaries
+    - NEW UPPERCASE feature_name with distinguishing suffix; never reuse an
+      existing name
     - Short stable value (not the raw instruction)
 """
 

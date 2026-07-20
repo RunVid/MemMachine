@@ -135,8 +135,8 @@ def validate_manual_write_append(
     """
     Return a duplicate message, or None if the write may proceed.
 
-    Same feature_name is not a hard conflict; the LLM should pick a new unique
-    name for each append. Only exact duplicate values are rejected here.
+    Same feature_name is not a hard conflict; names are uniquified with a suffix
+    before append. Only exact duplicate values are rejected here.
     Semantic conflicts are rejected by the LLM (accepted=false).
     """
     _ = feature_name
@@ -155,6 +155,40 @@ def validate_manual_write_append(
             )
 
     return None
+
+
+def _normalize_feature_name(feature_name: str) -> str:
+    return " ".join(feature_name.strip().upper().split())
+
+
+def unique_manual_feature_name(
+    *,
+    existing_features: list[SemanticFeature],
+    tag: str,
+    feature_name: str,
+) -> str:
+    """
+    Ensure feature_name is unique under tag by appending a numeric suffix.
+
+    Manual writes always append; colliding names get `` 2``, `` 3``, …
+    """
+    base = _normalize_feature_name(feature_name)
+    if base == "":
+        return base
+
+    normalized_tag = tag.strip().lower()
+    existing_names = {
+        _normalize_feature_name(feature.feature_name)
+        for feature in existing_features
+        if feature.tag.strip().lower() == normalized_tag
+    }
+    if base not in existing_names:
+        return base
+
+    suffix = 2
+    while f"{base} {suffix}" in existing_names:
+        suffix += 1
+    return f"{base} {suffix}"
 
 
 # Literal exclusive / cancel language in a feature VALUE (not feature_name).

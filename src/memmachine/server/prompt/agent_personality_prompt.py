@@ -45,51 +45,40 @@ MANUAL_WRITE_BLOCKED_CONTENT_PATTERNS: tuple[str, ...] = (
 SAME_TOPIC_WRITE_RULES = """
     ## WRITE CHOICE (CRITICAL — OVERRIDES GENERIC GUIDELINES)
 
-    ### Scope language (read literally)
+    Notification / filter SCOPE is an INCLUDE list. Extending scope is NEVER a
+    conflict. Never invent "only" into an existing or new value.
+    - A NEW scope claim like "Notify about emails from Peter" / "…Pine tasks"
+      is INCLUDE, not exclusive — never treat a new scope as exclusive.
+    - Conflict / REPLACE only when NEW literally has the word "only"
+      (or clear cancel language like "do not notify about…").
+    - If NEW extends scope (no literal "only" in NEW): always MERGE — keep old + new.
 
-    A NOTIFICATION SCOPE value that lists who/what to notify about is an INCLUDE
-    list, not an exclusive filter — unless the value itself uses exclusive "only"
-    (or clear cancel language).
-    - "Notify about emails from Peter" = include Peter. Do NOT treat as only-Peter.
-    - Never invent "only" into an existing scope when deciding MERGE vs REPLACE.
+    Paths:
+    A) ADD NEW — different topic → only `add` with a new feature_name
+    B) MERGE — same topic / extending scope (default)
+       → `delete` old feature_name, `add` same feature_name with combined value
+       → even if OLD said "only …", a later non-only NEW still MERGEs
+    C) REPLACE — only when NEW itself says exclusive "only …" / cancels old
+       → `delete` old, `add` the new rule alone
 
-    For every claim, choose exactly one path:
-
-    A) ADD NEW — different topic from all existing features
-       → emit only `add` with a new feature_name
-
-    B) MERGE — default for same-topic writes (NOTIFICATION SCOPE, etc.)
-       → Combine old criteria + new criteria into ONE value (both kept)
-       → Then `delete` the old feature_name and `add` the same feature_name with
-         that combined value
-       → Even when the OLD value said "only …", a later non-exclusive claim still
-         MERGEs: expand the scope (keep old criteria + new criteria). This is NOT
-         a conflict and NOT a replace-with-new-only.
-       → Person A then person B (Mike then Peter) → always MERGE both
-
-    C) REPLACE — only when the NEW claim itself is exclusive "only …", or clearly
-       cancels / mutually excludes the old rule
-       → `delete` the old feature, then `add` the new rule alone
-       → Do not use C just because topics are related, or because people differ
-
-    Notification-scope examples (feature = NOTIFICATION SCOPE):
-    - MERGE (even old "only"): existing value="Only notify about emails related
-      to Pine tasks" + new="Notify about emails from Mike"
-      → keep Pine-task emails AND emails from Mike
-    - MERGE: existing value="Notify about emails from Mike"
+    Examples (feature = NOTIFICATION SCOPE):
+    - MERGE: existing="Notify about emails from Peter"
+      + new="Notify about emails related to Pine tasks"
+      → keep Peter AND Pine tasks
+    - MERGE: existing="Notify about emails from Mike"
       + new="Notify about emails from Peter"
-      → keep BOTH Mike and Peter (do NOT drop Mike)
-    - MERGE: existing value="Notify about emails from Peter"
+      → keep BOTH
+    - MERGE: existing="Only notify about emails related to Pine tasks"
       + new="Notify about emails from Mike"
-      → keep BOTH (Peter scope was include, not only-Peter)
-    - REPLACE (NEW says exclusive only): existing value="Notify about emails
-      from Mike and Pine tasks" + new="Only notify about emails from Mike"
-      → value is only Mike
+      → keep Pine tasks AND Mike (NEW has no only → merge)
+    - REPLACE: existing="Notify about emails from Mike and Pine tasks"
+      + new="Only notify about emails from Mike"
+      → only Mike (NEW has only)
 
     Also:
-    - Exact duplicate of an existing value → no write
-    - For B and C: never leave the old same-topic feature behind; never emit only `add`
-    - Ignore any generic guideline that says not to delete; B/C require delete+add
+    - Exact duplicate → no write
+    - For B/C: never leave old same-topic feature; never emit only `add`
+    - Ignore guidelines that forbid delete; B/C need delete+add
 """
 
 MANUAL_INSTRUCTION_RULES = """
@@ -101,20 +90,21 @@ MANUAL_INSTRUCTION_RULES = """
     2) DUPLICATE — if the instruction matches an existing value (same meaning /
        same text), reject as duplicate. Stop.
 
-    3) CLEAR LOGICAL CONFLICT — reject ONLY for a true cannot-both-be-true clash
-       (literal exclusive "only" / cancel language in a VALUE).
-       Scope is NEVER "only" and NEVER a conflict by itself:
-       NOTIFICATION_SCOPE / "Notify about emails from …" means INCLUDE, not
-       exclusive-only. Extending scope is always OK — ACCEPT and add a NEW
-       feature_name (do not reject, do not invent "only").
-       Example (must ACCEPT, new feature to extend scope):
+    3) CLEAR LOGICAL CONFLICT — reject ONLY when the NEW instruction itself uses
+       exclusive "only" / cancel language that cannot coexist with an existing
+       VALUE. Scope is NEVER a conflict: NOTIFICATION_SCOPE / "Notify about
+       emails from …" means INCLUDE. Extending scope → always ACCEPT; append a
+       NEW feature_name with a distinguishing suffix (never reuse the existing
+       name; never invent "only" on the existing value).
+       Example (must ACCEPT):
        - existing NOTIFICATION_SCOPE="Notify about emails from Peter"
-         + instruction="Notify about emails related to Pine tasks"
-         → ACCEPT; e.g. feature_name="NOTIFICATION SCOPE PINE TASKS",
+         + "Notify about emails related to Pine tasks"
+         → feature_name="NOTIFICATION SCOPE PINE TASKS" (suffix),
            value="Notify about emails related to Pine tasks"
-       Same for Peter then Mike, or any extra include criterion.
+       - existing Peter + "Notify about emails from Mike"
+         → feature_name="NOTIFICATION SCOPE MIKE" (suffix)
 
-    4) ACCEPT and APPEND — map to one tag, pick a NEW feature_name, write a
+    4) ACCEPT and APPEND — map to one tag, NEW feature_name with suffix if needed,
        short stable value. Never merge or overwrite existing rows.
 
     Reject if the instruction is not an agent behavior / preference setting
@@ -123,9 +113,10 @@ MANUAL_INSTRUCTION_RULES = """
     ## OUTPUT SHAPE
 
     - One best tag: tone | persona | style | boundaries
-    - NEW concise UPPERCASE feature_name (do not reuse an existing name)
+    - NEW concise UPPERCASE feature_name; always add a distinguishing suffix
+      when related to an existing name (e.g. NOTIFICATION SCOPE →
+      NOTIFICATION SCOPE PINE TASKS). Never reuse an existing feature_name.
     - Short stable value (not the raw instruction)
-    - boundaries may hold many independent criteria, each its own feature_name
 """
 
 CATEGORY_MANUAL_INSTRUCTION_CONFIG: dict[str, dict[str, object]] = {

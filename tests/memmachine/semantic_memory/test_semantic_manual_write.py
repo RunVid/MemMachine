@@ -5,6 +5,7 @@ import pytest
 from memmachine.semantic_memory.semantic_manual_write import (
     build_manual_instruction_system_prompt,
     normalize_manual_write_tag,
+    unique_manual_feature_name,
     validate_manual_write_append,
     validate_manual_write_content,
 )
@@ -33,10 +34,11 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert "Sexual or explicit adult content" in prompt
     assert "DECISION ORDER" in prompt
     assert "CLEAR LOGICAL CONFLICT" in prompt
-    assert "Scope is NEVER" in prompt
+    assert "Scope is NEVER a conflict" in prompt
+    assert "distinguishing suffix" in prompt
     assert "Notify about emails from Peter" in prompt
     assert "Notify about emails related to Pine tasks" in prompt
-    assert "extend scope" in prompt
+    assert "Extending scope" in prompt
 
 
 def test_validate_manual_write_content_uses_prompt_file_blocklist():
@@ -106,4 +108,42 @@ def test_normalize_manual_write_tag_defaults_unknown_to_style():
             tag="completely_unrelated",
         )
         == "style"
+    )
+
+
+def test_unique_manual_feature_name_keeps_unused_name():
+    existing = [
+        _feature(
+            tag="boundaries",
+            feature_name="NOTIFICATION_SCOPE",
+            value="Notify about emails from Peter",
+        ),
+    ]
+
+    assert (
+        unique_manual_feature_name(
+            existing_features=existing,
+            tag="boundaries",
+            feature_name="NOTIFICATION SCOPE PINE TASKS",
+        )
+        == "NOTIFICATION SCOPE PINE TASKS"
+    )
+
+
+def test_unique_manual_feature_name_adds_suffix_on_collision():
+    existing = [
+        _feature(
+            tag="boundaries",
+            feature_name="NOTIFICATION SCOPE",
+            value="Notify about emails from Peter",
+        ),
+    ]
+
+    assert (
+        unique_manual_feature_name(
+            existing_features=existing,
+            tag="boundaries",
+            feature_name="notification scope",
+        )
+        == "NOTIFICATION SCOPE 2"
     )

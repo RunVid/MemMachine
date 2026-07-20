@@ -237,6 +237,7 @@ class SemanticService:
         from memmachine.semantic_memory.semantic_manual_write import (
             build_manual_instruction_system_prompt,
             normalize_manual_write_tag,
+            unique_manual_feature_name,
             validate_manual_write_append,
             validate_manual_write_content,
         )
@@ -291,6 +292,12 @@ class SemanticService:
         )
         if append_error is not None:
             raise ValueError(append_error)
+
+        feature_name = unique_manual_feature_name(
+            existing_features=existing_features,
+            tag=tag,
+            feature_name=feature_name,
+        )
 
         feature_id, created = await self.append_feature(
             set_id=set_id,

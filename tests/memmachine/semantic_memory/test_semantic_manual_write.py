@@ -31,10 +31,12 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert "persona" in prompt
     assert MANUAL_INSTRUCTION_RULES.strip() in prompt
     assert "Sexual or explicit adult content" in prompt
-    assert "append-only" in prompt
-    assert "many independent features" in prompt
-    assert "Compatible additional criteria → always append" in prompt
-    assert "Do NOT reject for lacking a personality trait" in prompt
+    assert "DECISION ORDER" in prompt
+    assert "CLEAR LOGICAL CONFLICT" in prompt
+    assert "INCLUDE lists" in prompt
+    assert "Notify about emails from Peter" in prompt
+    assert "Notify about emails related to Pine tasks" in prompt
+    assert "never invent \"only\"" in prompt
 
 
 def test_validate_manual_write_content_uses_prompt_file_blocklist():

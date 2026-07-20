@@ -69,36 +69,16 @@ Allowed tags:
 
 {safety_rules}
 
-Return JSON when accepted (tone/persona/style example):
-{{
-  "accepted": true,
-  "rejection_reason": "",
-  "tag": "tone",
-  "feature_name": "FORMALITY",
-  "value": "Professional but friendly"
-}}
-
-Return JSON when accepted (boundaries example):
+Accept example:
 {{
   "accepted": true,
   "rejection_reason": "",
   "tag": "boundaries",
-  "feature_name": "SCOPE RULE A",
-  "value": "Short stable rule text"
+  "feature_name": "NOTIFICATION SCOPE PINE TASKS",
+  "value": "Notify about emails related to Pine tasks"
 }}
 
-When a related boundaries criterion already exists, still ACCEPT and APPEND with a
-NEW feature_name (same tag may hold many compatible criteria):
-{{
-  "accepted": true,
-  "rejection_reason": "",
-  "tag": "boundaries",
-  "feature_name": "SCOPE RULE B",
-  "value": "Another compatible criterion"
-}}
-
-Reject ONLY for safety, unrelated category, exact duplicate value, or mutually
-exclusive conflict (not merely because a similar feature already exists):
+Reject example:
 {{
   "accepted": false,
   "rejection_reason": "reason",
@@ -174,3 +154,34 @@ def validate_manual_write_append(
             )
 
     return None
+
+
+# Literal exclusive / cancel language in a feature VALUE (not feature_name).
+_EXCLUSIVE_VALUE_RE = re.compile(
+    r"\bonly\b|\bexclusively\b|\bstop notifying\b|\bdo not notify\b|\bdon't notify\b",
+    re.IGNORECASE,
+)
+
+
+def existing_values_have_exclusive_language(
+    existing_features: list[SemanticFeature],
+) -> bool:
+    """True if any existing feature VALUE uses exclusive/cancel language."""
+    return any(
+        _EXCLUSIVE_VALUE_RE.search(feature.value) for feature in existing_features
+    )
+
+
+def rejection_invents_exclusive_only(
+    *,
+    rejection_reason: str,
+    existing_features: list[SemanticFeature],
+) -> bool:
+    """
+    True when a conflict rejection claims exclusive 'only' but no existing
+    VALUE actually contains exclusive/cancel language.
+    """
+    reason = rejection_reason.casefold()
+    if "only" not in reason and "exclusive" not in reason:
+        return False
+    return not existing_values_have_exclusive_language(existing_features)

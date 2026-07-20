@@ -93,74 +93,44 @@ SAME_TOPIC_WRITE_RULES = """
 """
 
 MANUAL_INSTRUCTION_RULES = """
-    ## INSTRUCTION WRITE RULES
+    ## DECISION ORDER (follow in order)
 
-    - Append-only: never merge or overwrite existing features
-    - Map the instruction to exactly one best matching tag
-    - Always pick a NEW concise UPPERCASE feature name (do not reuse an existing
-      name; if the natural name is taken, choose a distinct variant)
-    - Store a short stable value describing the preference or rule, not the raw
-      instruction
-    - Accept tone, persona, style, and boundaries; boundaries need not sound like
-      personality traits
+    1) SAFETY — if the instruction is sexual / violent / illegal (see SAFETY),
+       reject (accepted=false). Stop.
 
-    ## BOUNDARIES TAG
+    2) DUPLICATE — if the instruction matches an existing value (same meaning /
+       same text), reject as duplicate. Stop.
 
-    - Scope limits, filters, task/topic focus, notify/ignore rules, refusal patterns
-    - Do NOT reject for lacking a personality trait
-    - One boundaries topic may be many independent features: each distinct criterion
-      is its own append with its own feature_name (e.g. NOTIFICATION SCOPE PETER)
+    3) CLEAR LOGICAL CONFLICT — reject ONLY when an existing VALUE (or the new
+       instruction) literally uses exclusive "only" / cancel language
+       ("do not notify about…") such that both cannot be true.
+       Notification / filter scopes are INCLUDE lists: feature name
+       NOTIFICATION_SCOPE does NOT mean "only"; read the VALUE literally;
+       never invent "only".
+       NOT a conflict (must continue to step 4 / ACCEPT):
+       - existing NOTIFICATION_SCOPE="Notify about emails from Peter"
+         + "Notify about emails related to Pine tasks"
+       - existing="Notify about emails from Peter"
+         + "Notify about emails from Mike"
+       IS a conflict (REJECT here):
+       - existing="Only notify about emails from Peter"
+         + "Notify about emails from Mike"
+       - existing="Only notify about emails from Mike"
+         + "Only notify about emails from Peter"
+       If no clear literal conflict: do not reject; go to step 4.
 
-    ## SCOPE IS INCLUDE, NOT "ONLY" (unless the value says so)
+    4) ACCEPT and APPEND — map to one tag, pick a NEW feature_name, write a
+       short stable value. Never merge or overwrite existing rows.
 
-    Read feature values literally. Never invent exclusive "only".
-    - feature=NOTIFICATION SCOPE / NOTIFICATION_SCOPE,
-      value="Notify about emails from Peter"
-      → INCLUDE Peter. NOT "only Peter". NOT "nobody else".
-    - Same for Mike / Pine tasks / any listed criterion without the word "only".
-    - Without literal "only" (or cancel language like "stop notifying about…" /
-      "do not notify about…"), scopes are additive. Multiple people/topics can
-      all be true. Same-topic additional criteria are NOT a conflict.
+    Reject if the instruction is not an agent behavior / preference setting
+    (e.g. user personal facts, one-off tasks, unrelated content).
 
-    Never reject with a reason that claims an existing NOTIFICATION SCOPE
-    "specifies to notify only about …" unless that existing value actually
-    contains exclusive "only" (or equivalent cancel language).
+    ## OUTPUT SHAPE
 
-    ## CONFLICT AND DUPLICATE HANDLING
-
-    Default: ACCEPT and APPEND with a new feature_name.
-
-    Reject (accepted=false) ONLY when:
-    1) exact duplicate of an existing value, OR
-    2) TRUE mutual exclusion with an existing rule — the existing value (or the
-       new instruction) uses exclusive "only" / cancel language such that both
-       cannot be true.
-
-    True conflict examples (REJECT):
-    - existing feature=NOTIFICATION SCOPE,
-      value="Only notify about emails from Peter"
-      + instruction="Notify me about emails from Mike"
-      → REJECT (existing exclusive only-Peter excludes Mike)
-    - existing value="Only notify about emails from Mike"
-      + instruction="Only notify about emails from Peter"
-      → REJECT
-
-    NOT a conflict (must ACCEPT and APPEND) — do not invent "only":
-    - existing feature=NOTIFICATION SCOPE, value="Notify about emails from Mike"
-      + instruction="Notify me about emails from Peter"
-      → ACCEPT; new feature_name (e.g. NOTIFICATION SCOPE PETER)
-    - existing feature=NOTIFICATION_SCOPE, value="Notify about emails from Peter"
-      + instruction="Notify me about emails from Mike"
-      → ACCEPT and append (include-Peter ≠ only-Peter)
-    - existing Mike scope + Pine-tasks instruction → ACCEPT and append
-
-    Compatible additional criteria → always append (new feature_name), never merge,
-    never overwrite, never reject as "conflicts with existing …".
-
-    ## CATEGORY REJECTION
-
-    - Accept agent behavior / communication / scope instructions
-    - Reject unrelated content, or sexual / violent / illegal content per SAFETY
+    - One best tag: tone | persona | style | boundaries
+    - NEW concise UPPERCASE feature_name (do not reuse an existing name)
+    - Short stable value (not the raw instruction)
+    - boundaries may hold many independent criteria, each its own feature_name
 """
 
 CATEGORY_MANUAL_INSTRUCTION_CONFIG: dict[str, dict[str, object]] = {

@@ -199,6 +199,42 @@ async def test_manual_write_accepts_peter_then_mike(live_llm):
 
 @_requires_openai
 @pytest.mark.asyncio
+async def test_manual_write_accepts_peter_then_pine_tasks(live_llm):
+    """Real stuck case: Peter include-scope + Pine tasks must append, not invent only."""
+    existing = [
+        _enthusiasm_tone(),
+        _feature(
+            tag="boundaries",
+            feature_name="NOTIFICATION_SCOPE",
+            value="Notify about emails from Peter",
+            feature_id="boundaries-notify",
+        ),
+    ]
+    system_prompt = build_manual_instruction_system_prompt(
+        category_name="agent_personality",
+    )
+    parsed = await llm_parse_manual_instruction(
+        instruction="Notify about emails related to Pine tasks",
+        existing_features=existing,
+        model=live_llm,
+        system_prompt=system_prompt,
+    )
+
+    print("\n=== manual_write Peter→Pine LLM return ===")
+    pprint(parsed.model_dump())
+
+    assert parsed.accepted is True, parsed.rejection_reason
+    assert parsed.tag.strip().lower() == "boundaries"
+    assert "pine" in parsed.value.casefold() or "task" in parsed.value.casefold(), (
+        parsed.value
+    )
+    reason = parsed.rejection_reason.casefold()
+    assert "conflict" not in reason
+    assert "only" not in reason, parsed.rejection_reason
+
+
+@_requires_openai
+@pytest.mark.asyncio
 async def test_ingest_merges_notification_scope_instead_of_replace(live_llm):
     """Same-topic extend must merge old+new, not replace with only the new clause."""
     existing = [

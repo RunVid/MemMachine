@@ -18,7 +18,7 @@ semantic_memory:
   llm_model: openai_model
   embedding_model: openai_embedder
   database: profile_storage
-  ingestion_trigger_messages: 5
+  ingestion_trigger_messages: 1
   ingestion_trigger_age: "PT5M"
 
 session_manager:

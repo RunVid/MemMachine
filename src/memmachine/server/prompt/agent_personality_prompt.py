@@ -37,38 +37,55 @@ MANUAL_WRITE_BLOCKED_CONTENT_PATTERNS: tuple[str, ...] = (
     r"\b(illegal|hack into|steal credentials|make bomb|child abuse)\b",
 )
 
-MANUAL_INSTRUCTION_RULES = """
+# Shared merge rules for ingest + manual write.
+COMPLEMENTARY_MERGE_RULES = """
+    ## COMPLEMENTARY MERGE (CRITICAL)
+
+    Rules about the SAME topic MUST live in ONE feature with a single merged value.
+    Do NOT create a second parallel feature. Do NOT reject as conflict.
+
+    Complementary = the new rule adds, refines, or narrows criteria on a topic that
+    already has a feature (same intent / same axis). Treat it as an update to that
+    feature:
+    - reuse the existing feature_name (do not invent a sibling name for the same topic)
+    - write a value that covers the old criteria AND the new criteria
+
+    Unrelated topics (different axes) may keep separate features under the same tag.
+    True contradictions (cannot both hold) → reject / skip; do not store both.
+    Exact duplicate of an existing value → reject / skip (no write).
+"""
+
+MANUAL_INSTRUCTION_RULES = f"""
     ## INSTRUCTION WRITE RULES
 
-    - Manual writes are append-only: never update, merge, or reuse existing feature names
     - Map the instruction to exactly one best matching tag
-    - Pick a new concise UPPERCASE feature name for each accepted instruction
-    - Store a short stable value describing the preference or rule, not the raw instruction text
-    - Compare carefully with existing features before deciding placement
-    - Accept tone, persona, style, and boundaries instructions; boundaries do not need to sound
-      like a personality trait
+    - Prefer stable UPPERCASE feature names
+    - Store a short stable value describing the preference or rule, not the raw instruction
+    - Compare carefully with existing features before deciding
+    - Accept tone, persona, style, and boundaries instructions; boundaries do not need to
+      sound like a personality trait
 
     ## BOUNDARIES TAG
 
-    - Use `boundaries` for scope limits, notification filters, task/topic focus, and what to
-      include, exclude, notify about, or ignore
-    - Accept instructions such as:
-      - "Only notify me about emails related to Pine tasks"
-      - "Ignore promotional emails unless I ask"
-      - "Do not summarize attachments unless requested"
-    - Do NOT reject a boundaries instruction for lacking a personality trait; scope and
-      filtering rules are valid boundaries
-    - Example mapping:
-      instruction -> tag=boundaries, feature_name=NOTIFICATION_SCOPE,
-      value="Only notify about emails related to Pine tasks"
+    - Use `boundaries` for scope limits, filters, task/topic focus, notify/ignore rules,
+      and refusal patterns
+    - Do NOT reject a boundaries instruction for lacking a personality trait
+
+    {COMPLEMENTARY_MERGE_RULES}
+
+    When merging complementary rules:
+    - accepted=true
+    - reuse the existing feature_name
+    - value = full merged rule covering old + new criteria
 
     ## CONFLICT AND DUPLICATE HANDLING
 
-    - Reject when the instruction would duplicate an existing value under the same tag
-    - Reject when the proposed feature name already exists under the same tag
-    - Reject when the instruction overlaps or conflicts with an existing rule in the same tag
-    - Set accepted=false and provide a clear rejection_reason for duplicates and conflicts
-    - Reject only when the instruction violates safety rules (see SAFETY section)
+    - Reject (accepted=false) only for:
+      - exact duplicate of an existing value
+      - true contradictions that cannot be merged
+      - safety / category violations
+    - Do NOT reject complementary extensions of an existing topic — merge them
+    - Do NOT invent a second feature name for the same topic
 
     ## CATEGORY REJECTION
 
@@ -79,7 +96,6 @@ MANUAL_INSTRUCTION_RULES = """
     - Do not reject valid agent-behavior instructions for being too specific, operational,
       or not sounding like a personality trait
 """
-
 CATEGORY_MANUAL_INSTRUCTION_CONFIG: dict[str, dict[str, object]] = {
     "agent_personality": {
         "tags": AGENT_PERSONALITY_TAGS,
@@ -128,17 +144,7 @@ AGENT_PERSONALITY_DESCRIPTION = f"""
     Stable, reusable agent settings from the claim only. Tag meanings are defined
     in the tag list below — do not invent other categories.
 
-    Examples:
-    - "Be warm but concise" → tag=tone, feature=WARMTH, value="Warm but concise"
-    - "You are a helpful copilot for Pine" → tag=persona, feature=ROLE,
-      value="Helpful copilot for Pine"
-    - "Prefer bullet points" → tag=style, feature=RESPONSE FORMAT,
-      value="Prefer bullet points"
-    - "Only notify me about emails related to Pine tasks" → tag=boundaries,
-      feature=NOTIFICATION_SCOPE,
-      value="Only notify about emails related to Pine tasks"
-
-    Feature names: concise UPPERCASE with spaces (e.g., "RESPONSE FORMAT").
+    Feature names: concise UPPERCASE with spaces.
     Values: short stable preference/rule text — not a verbatim dump of the claim
     when a clearer paraphrase exists.
 
@@ -146,32 +152,29 @@ AGENT_PERSONALITY_DESCRIPTION = f"""
 
     - User personal facts (name, job, preferences about the user themselves)
     - Claims that are not about agent tone, persona, style, or boundaries
+    - One-off task requests with no lasting agent setting
     - Content blocked by SAFETY rules below
 
-    Examples of INCORRECT extraction (DO NOT DO THIS):
-    - "My name is Alice" → user fact, not agent personality
-    - "Summarize this email now" → one-off task claim, not a lasting setting
+    {COMPLEMENTARY_MERGE_RULES}
 
     ## UPDATE WORKFLOW
 
     1. Read existing features for the relevant tag
-    2. If the claim duplicates an existing value → do nothing (no add)
-    3. If it conflicts with or supersedes an existing feature → delete old, then add new
-    4. If it is a distinct new setting → add with a new feature name
-    5. Prefer delete+add over stacking near-duplicates under the same tag
+    2. Exact duplicate value → do nothing
+    3. Complementary on the same topic → delete old feature(s), then add ONE merged
+       feature reusing the same feature_name
+    4. True contradiction / supersede → delete old, then add new
+    5. Unrelated distinct setting → add with a new feature name
+    6. NEVER leave two features for the same topic side by side
 
-    Update example (tone becomes less formal):
+    Complementary merge shape (reuse existing feature name):
     {{
-        "0": {{
-            "command": "delete",
-            "tag": "tone",
-            "feature": "FORMALITY"
-        }},
+        "0": {{"command": "delete", "tag": "<tag>", "feature": "<EXISTING FEATURE>"}},
         "1": {{
             "command": "add",
-            "tag": "tone",
-            "feature": "FORMALITY",
-            "value": "Casual and friendly"
+            "tag": "<tag>",
+            "feature": "<EXISTING FEATURE>",
+            "value": "<merged rule covering old + new>"
         }}
     }}
 
@@ -180,7 +183,7 @@ AGENT_PERSONALITY_DESCRIPTION = f"""
 
 agent_personality_consolidation_prompt = (
     build_consolidation_prompt()
-    + """
+    + f"""
 
     ## AGENT PERSONALITY CONSOLIDATION
 
@@ -189,37 +192,29 @@ agent_personality_consolidation_prompt = (
 
     ### Goal
     Keep a small, clear set of stable agent settings. Remove redundancy and
-    near-duplicates so the agent profile stays easy to apply.
+    merge complementary rules so the agent profile stays easy to apply.
+
+    {COMPLEMENTARY_MERGE_RULES}
 
     ### Workflow
 
     Step 1: DELETE first (exclude id from keep_memories)
-    - Exact or near-duplicate values under the same feature → keep one, drop rest
+    - Exact or near-duplicate values → keep one, drop rest
     - Vague / unusable entries → delete
-    - Unsafe content (sexual, violent, illegal) → delete
+    - Unsafe content → delete
 
     Step 2: Merge within the same tag
-    - Same meaning, different wording → delete sources, create one clear consolidated memory
-    - Same feature name, conflicting values → keep the newer/clearer rule; drop the rest
-    - Distinct settings (e.g. NOTIFICATION_SCOPE vs REFUSAL_POLICY) → keep both
+    - Same meaning, different wording → one consolidated memory
+    - Complementary rules on the same topic → MUST merge into ONE memory
+      (same feature name, combined value). Never keep them as siblings.
+    - True contradictions → keep the clearer/newer rule; drop the other
+    - Unrelated topics (different axes) → keep both
 
     Step 3: Do NOT
     - Create new tags
     - Merge across different tags
-    - Invent user-profile facts during consolidation
-    - Keep redundant memories that express the same trait
-
-    Example (near-duplicates → one memory):
-    - id=1 feature=WARMTH value="Be warm"
-    - id=2 feature=WARMTH value="Warm and friendly tone"
-    → keep_memories=[], consolidated_memories=[
-        {"tag": "tone", "feature": "WARMTH", "value": "Warm and friendly"}
-      ]
-
-    Example (distinct boundaries → keep both):
-    - id=3 feature=NOTIFICATION_SCOPE value="Only Pine-related emails"
-    - id=4 feature=REFUSAL_POLICY value="Decline medical diagnosis requests"
-    → keep_memories=["3", "4"], consolidated_memories=[]
+    - Invent user-profile facts
+    - Keep multiple memories for the same topic side by side
     """
     + SAFETY_RULES
 )

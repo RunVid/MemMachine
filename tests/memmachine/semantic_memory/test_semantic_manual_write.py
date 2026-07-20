@@ -39,6 +39,8 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert "VALUE text only" in prompt
     assert "Notify about emails related to Pine tasks" in prompt
     assert "cannot both be true" in prompt
+    assert "could overlap in functionality" in prompt
+    assert "Ignore emails related to Pine" in prompt
     assert "Feature_name naming" in prompt
     assert "NOTIFICATION SCOPE PETER" in prompt
 

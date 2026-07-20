@@ -97,19 +97,31 @@ MANUAL_INSTRUCTION_RULES = """
     Existing rows are VALUE text only — compare VALUEs only.
 
     "Notify …" and "Ignore …" are both valid preferences.
-    Conflict ONLY when two VALUEs cannot both be true at once.
-    If they can coexist → ACCEPT. If unsure → ACCEPT.
+    Conflict ONLY when two VALUEs cannot both be true at once
+    (same target, opposite or exclusive). If unsure → ACCEPT.
+
+    NOT a conflict (these are INVALID rejection reasons — never use them):
+    - both say ignore / both say notify
+    - "could overlap in functionality"
+    - related topic / same domain (e.g. both about Pine or both about email)
+    - similar wording that is not an exact duplicate (duplicates are STAGE A)
+
+    FORBIDDEN rejection example (do not produce):
+    - "conflicts with ignoring emails from Pine … both involve ignoring emails
+      and could overlap" — WRONG. Two ignore rules coexist; APPEND.
 
     Can coexist (MUST ACCEPT):
+    - existing="Ignore emails related to Pine"
+      + "Ignore emails about promotions" → ACCEPT
+    - existing="Ignore emails from newsletters"
+      + "Ignore emails about promotions" → ACCEPT
     - existing="Notify about emails related to Pine tasks"
       + "Notify about emails from Peter" → ACCEPT
     - existing="Notify about emails from Alice"
       + "Notify about emails from Peter" → ACCEPT
-    - existing="Ignore emails from newsletters"
-      + "Ignore emails about promotions" → ACCEPT
     - notify A + ignore B (different targets) → ACCEPT
 
-    True conflict (REJECT) — same target, opposite / exclusive:
+    True conflict (REJECT) — same target, opposite / exclusive only:
     - existing="Notify about emails from Peter"
       + "Ignore emails from Peter" → REJECT
     - existing="Only notify about emails from Alice"

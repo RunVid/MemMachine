@@ -50,17 +50,30 @@ SAME_TOPIC_WRITE_RULES = """
     A) ADD NEW — different topic from all existing features
        → emit only `add` with a new feature_name
 
-    B) MERGE — same topic, and both old and new can coexist
-       (new extends / refines the old; e.g. old said "only X", new adds another
-       criterion that can still hold together)
-       → Merge means: combine old criteria + new criteria into ONE value, then
-         replace the old row (`delete` old feature_name, `add` same feature_name
-         with that combined value). Result is a single feature covering both.
-       → Do not keep two features. Do not keep only the new clause.
+    B) MERGE — same topic, and the NEW claim does NOT exclusively cancel the old
+       (default for same-topic writes)
+       → Additional / extending criteria are NOT a conflict — MERGE them
+       → Combine old criteria + new criteria into ONE value (both kept)
+       → Then `delete` the old feature_name and `add` the same feature_name with
+         that combined value
+       → Even if the old value said "only …", a later non-exclusive claim still
+         MERGEs (keep old + new). Do not treat that as conflict.
 
-    C) CONFLICT — same topic, new claim conflicts with / cancels the old rule
+    C) REPLACE — only when the NEW claim itself is exclusive "only …", or clearly
+       cancels / mutually excludes the old rule
        → `delete` the old feature, then `add` the new rule alone
-       → do not try to keep incompatible old criteria
+       → Do not use C just because the topics are related
+
+    Notification-scope examples (same topic = NOTIFICATION SCOPE):
+    - MERGE: existing="Only notify about emails related to Pine tasks"
+      + new="Notify about emails from Mike"
+      → value covers both Pine-task emails and emails from Mike (not a conflict)
+    - MERGE: existing="Notify about emails from Mike"
+      + new="Notify about emails related to Pine tasks"
+      → value covers both (not a conflict)
+    - REPLACE: existing="Notify about emails from Mike and Pine tasks"
+      + new="Only notify about emails from Mike"
+      → value is only Mike (NEW claim said exclusive only)
 
     Also:
     - Exact duplicate of an existing value → no write
@@ -84,23 +97,20 @@ MANUAL_INSTRUCTION_RULES = """
 
     - Scope limits, filters, task/topic focus, notify/ignore rules, refusal patterns
     - Do NOT reject for lacking a personality trait
+    - One boundaries topic may be many independent features: each distinct criterion
+      is its own append with its own feature_name
 
     ## CONFLICT AND DUPLICATE HANDLING
 
     Default: ACCEPT and APPEND with a new feature_name.
-    Related / additional rules on a similar topic are NOT conflicts — append them.
+    An existing feature in the same tag/topic area is not a reason to reject.
 
     Reject (accepted=false) ONLY when:
-    - the new value is an exact duplicate of an existing value, OR
-    - the new rule and an existing rule are mutually exclusive (cannot both be true)
+    - exact duplicate of an existing value, OR
+    - mutually exclusive with an existing rule (cannot both be true)
 
-    NOT a conflict (must accept + append with a new name):
-    - existing notify/filter rule + another notify/filter criterion that can coexist
-    - same topic area but different criteria that do not cancel each other
-    - feature_name would collide — invent a new name and append
-
-    Do NOT merge or overwrite. Do NOT reject merely because a notification/scope
-    feature already exists.
+    Compatible additional criteria → always append (new feature_name), never merge,
+    never overwrite, never reject as "conflicts with existing …".
 
     ## CATEGORY REJECTION
 
@@ -136,7 +146,8 @@ AGENT_PERSONALITY_DESCRIPTION = f"""
     ## YOUR ROLE
 
     - Store reusable agent settings that persist across sessions
-    - For each claim: ADD NEW, MERGE (compatible same topic), or CONFLICT-replace
+    - For each claim: ADD NEW, MERGE (same topic, keep old+new), or REPLACE
+      (only if NEW claim is exclusive "only" / cancels old)
     - Ignore user personal facts and one-off task requests
 
     ALWAYS compare with existing features before writing.
@@ -168,21 +179,31 @@ AGENT_PERSONALITY_DESCRIPTION = f"""
     ADD NEW:
     {{"0": {{"command": "add", "tag": "<tag>", "feature": "<NEW>", "value": "<new>"}}}}
 
-    MERGE (compatible; keep old + new):
+    MERGE example (notification scope; keep old + new):
+    Existing: feature=NOTIFICATION SCOPE,
+              value="Only notify about emails related to Pine tasks"
+    Claim: "Notify about emails from Mike"
     {{
-        "0": {{"command": "delete", "tag": "<tag>", "feature": "<EXISTING>"}},
+        "0": {{
+            "command": "delete", "tag": "boundaries", "feature": "NOTIFICATION SCOPE"
+        }},
         "1": {{
-            "command": "add", "tag": "<tag>", "feature": "<EXISTING>",
-            "value": "<prior criteria + new criteria>"
+            "command": "add", "tag": "boundaries", "feature": "NOTIFICATION SCOPE",
+            "value": "Notify about emails related to Pine tasks and emails from Mike"
         }}
     }}
 
-    CONFLICT (delete old, keep only new):
+    REPLACE example (NEW claim says exclusive only):
+    Existing: feature=NOTIFICATION SCOPE,
+              value="Notify about emails related to Pine tasks and emails from Mike"
+    Claim: "Only notify about emails from Mike"
     {{
-        "0": {{"command": "delete", "tag": "<tag>", "feature": "<EXISTING>"}},
+        "0": {{
+            "command": "delete", "tag": "boundaries", "feature": "NOTIFICATION SCOPE"
+        }},
         "1": {{
-            "command": "add", "tag": "<tag>", "feature": "<EXISTING>",
-            "value": "<new rule only>"
+            "command": "add", "tag": "boundaries", "feature": "NOTIFICATION SCOPE",
+            "value": "Only notify about emails from Mike"
         }}
     }}
 """
@@ -198,8 +219,9 @@ agent_personality_consolidation_prompt = (
 
     {SAME_TOPIC_WRITE_RULES}
 
-    Consolidation: compatible same-topic → merge into one; conflicting → keep winner.
-    Different topics → may keep both. Never keep multiple memories for one topic.
+    Consolidation: same topic → merge old+new into one unless a NEW claim is exclusive
+    "only" / cancels the other. Different topics → may keep both.
+    Never keep multiple memories for one topic.
 
     Skip / drop unsafe content (do not write):
     {SAFETY_SKIP_ITEMS}

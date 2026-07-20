@@ -78,27 +78,27 @@ Return JSON when accepted (tone/persona/style example):
   "value": "Professional but friendly"
 }}
 
-Return JSON when accepted (boundaries / scope example):
+Return JSON when accepted (boundaries example):
 {{
   "accepted": true,
   "rejection_reason": "",
   "tag": "boundaries",
-  "feature_name": "NOTIFICATION_SCOPE",
-  "value": "Only notify about emails related to Pine tasks"
+  "feature_name": "SCOPE RULE A",
+  "value": "Short stable rule text"
 }}
 
-If a related boundaries rule already exists, still accept with a NEW feature_name
-(append-only; do not reject as conflict):
+When a related boundaries criterion already exists, still ACCEPT and APPEND with a
+NEW feature_name (same tag may hold many compatible criteria):
 {{
   "accepted": true,
   "rejection_reason": "",
   "tag": "boundaries",
-  "feature_name": "NOTIFICATION_SCOPE SENDER",
-  "value": "Also notify about emails from Mike"
+  "feature_name": "SCOPE RULE B",
+  "value": "Another compatible criterion"
 }}
 
 Reject ONLY for safety, unrelated category, exact duplicate value, or mutually
-exclusive conflict with an existing rule:
+exclusive conflict (not merely because a similar feature already exists):
 {{
   "accepted": false,
   "rejection_reason": "reason",

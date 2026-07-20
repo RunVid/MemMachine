@@ -625,11 +625,11 @@ def test_write_semantic_memory(client, mock_memmachine):
 
     mock_memmachine.write_semantic_from_instruction.reset_mock()
     mock_memmachine.write_semantic_from_instruction.side_effect = ValueError(
-        "Conflict: feature 'RESPONSE FORMAT' already exists in tag 'style'",
+        "Duplicate: value already exists under feature 'RESPONSE FORMAT' in tag 'style'",
     )
     response = client.post("/api/v2/memories/semantic", json=payload)
     assert response.status_code == 422
-    assert "Conflict:" in response.json()["detail"]["internal_error"]
+    assert "Duplicate:" in response.json()["detail"]["internal_error"]
 
     mock_memmachine.write_semantic_from_instruction.reset_mock()
     mock_memmachine.write_semantic_from_instruction.side_effect = ValueError("Invalid")

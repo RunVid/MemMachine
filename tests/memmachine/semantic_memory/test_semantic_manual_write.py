@@ -32,7 +32,7 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert MANUAL_INSTRUCTION_RULES.strip() in prompt
     assert "Sexual or explicit adult content" in prompt
     assert "append-only" in prompt
-    assert "Do NOT merge or overwrite" in prompt
+    assert "Reusing / colliding with an existing feature_name is NOT a conflict" in prompt
     assert "Do NOT reject for lacking a personality trait" in prompt
 
 
@@ -44,7 +44,7 @@ def test_validate_manual_write_content_uses_prompt_file_blocklist():
         )
 
 
-def test_validate_manual_write_append_rejects_existing_feature_name():
+def test_validate_manual_write_append_allows_same_feature_name_with_new_value():
     existing = [_feature(tag="tone", feature_name="FORMALITY", value="Formal")]
 
     error = validate_manual_write_append(
@@ -54,9 +54,7 @@ def test_validate_manual_write_append_rejects_existing_feature_name():
         value="Professional but friendly",
     )
 
-    assert error is not None
-    assert error.startswith("Conflict:")
-    assert "FORMALITY" in error
+    assert error is None
 
 
 def test_validate_manual_write_append_rejects_duplicate_value():

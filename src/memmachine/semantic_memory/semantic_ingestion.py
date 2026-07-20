@@ -500,35 +500,6 @@ class IngestionService:
         for command in commands:
             match command.command:
                 case SemanticCommandType.ADD:
-                    # Same tag+feature must be unique for agent_personality; replace
-                    # even if the LLM forgot the preceding delete on extend/update.
-                    if category_name == "agent_personality":
-                        replace_filter = And(
-                            left=And(
-                                left=Comparison(field="set_id", op="=", value=set_id),
-                                right=Comparison(
-                                    field="category_name",
-                                    op="=",
-                                    value=category_name,
-                                ),
-                            ),
-                            right=And(
-                                left=Comparison(
-                                    field="feature",
-                                    op="=",
-                                    value=command.feature,
-                                ),
-                                right=Comparison(
-                                    field="tag",
-                                    op="=",
-                                    value=command.tag,
-                                ),
-                            ),
-                        )
-                        await self._semantic_storage.delete_feature_set(
-                            filter_expr=replace_filter,
-                        )
-
                     value_embedding = (await embedder.ingest_embed([command.value]))[0]
 
                     f_id = await self._semantic_storage.add_feature(

@@ -140,24 +140,22 @@ def validate_manual_write_append(
     feature_name: str,
     value: str,
 ) -> str | None:
-    """Return an append conflict/duplicate message, or None if the write may proceed."""
+    """
+    Return a duplicate message, or None if the write may proceed.
+
+    Same feature_name is not a hard conflict; the LLM should pick a new unique
+    name for each append. Only exact duplicate values are rejected here.
+    Semantic conflicts are rejected by the LLM (accepted=false).
+    """
+    _ = feature_name
     normalized_tag = tag.strip().lower()
-    normalized_feature = normalize_manual_write_text(feature_name)
     normalized_value = normalize_manual_write_text(value)
 
     for feature in existing_features:
         if feature.tag.strip().lower() != normalized_tag:
             continue
 
-        existing_feature = normalize_manual_write_text(feature.feature_name)
         existing_value = normalize_manual_write_text(feature.value)
-
-        if existing_feature == normalized_feature:
-            return (
-                f"Conflict: feature '{feature.feature_name}' already exists "
-                f"in tag '{feature.tag}'"
-            )
-
         if existing_value == normalized_value:
             return (
                 f"Duplicate: value already exists under feature "

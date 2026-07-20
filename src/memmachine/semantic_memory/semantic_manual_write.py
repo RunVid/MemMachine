@@ -69,13 +69,22 @@ Allowed tags:
 
 {safety_rules}
 
-Return JSON:
+Return JSON when accepted (tone/persona/style example):
 {{
   "accepted": true,
   "rejection_reason": "",
   "tag": "tone",
   "feature_name": "FORMALITY",
   "value": "Professional but friendly"
+}}
+
+Return JSON when accepted (boundaries / scope example):
+{{
+  "accepted": true,
+  "rejection_reason": "",
+  "tag": "boundaries",
+  "feature_name": "NOTIFICATION_SCOPE",
+  "value": "Only notify about emails related to Pine tasks"
 }}
 
 If rejected for safety, category mismatch, duplicate, or conflict with existing features:

@@ -119,8 +119,18 @@ MANUAL_INSTRUCTION_RULES = """
 
     - Append-only: never merge or overwrite
     - One tag: tone | persona | style | boundaries
-    - NEW UPPERCASE feature_name with distinguishing suffix
     - Short stable value (not the raw instruction)
+
+    Feature_name naming (for the NEW row you create):
+    - Concise UPPERCASE words with spaces (e.g. NOTIFICATION SCOPE PETER)
+    - Always invent a NEW name that distinguishes this criterion; never reuse
+      a generic bare name when appending a related rule
+    - Prefer a short topic suffix: person → … PETER / … ALICE;
+      topic → … PINE TASKS; ignore rule → … IGNORE NEWSLETTERS
+    - Examples: "Notify about emails from Peter"
+      → feature_name="NOTIFICATION SCOPE PETER";
+      "Ignore emails about promotions"
+      → feature_name="NOTIFICATION IGNORE PROMOTIONS"
 """
 
 CATEGORY_MANUAL_INSTRUCTION_CONFIG: dict[str, dict[str, object]] = {

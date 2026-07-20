@@ -95,11 +95,12 @@ MANUAL_INSTRUCTION_RULES = """
 
     Default: ACCEPT and APPEND. Existing rows are VALUE text only.
 
-    HARD RULE — multiple ignore / notify sources are NEVER a conflict:
-    Ignoring (or notifying about) source A and source B are independent filters.
-    Many ignore rules and many notify rules may all coexist. APPEND each one.
-    "Both involve ignoring emails" / "existing boundaries for ignoring emails"
-    is NEVER a valid conflict reason.
+    HARD RULE — ignore/notify filters are a LIST of independent sources.
+    Ignoring (or notifying about) source A and source B is NEVER a conflict.
+    Many ignore rules may all coexist (Pine + newsletters + promotions + …).
+    Same for many notify rules. APPEND each one with a new feature_name.
+    NEVER reject with "conflicts with existing boundaries for ignoring emails"
+    or "both involve ignoring emails" — those reasons are always wrong.
 
     Conflict ONLY if two VALUEs cannot both be true
     (same target AND opposite/exclusive). If unsure → ACCEPT.

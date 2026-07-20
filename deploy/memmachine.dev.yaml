@@ -90,8 +90,6 @@ volumes:
 
 networks:
   pine-local-env-net:
-    # Exact Docker network name (avoids deploy_pine-local-env-net).
-    # Use external: true instead of driver if local-env already owns this network:
-    #   external: true
+    # Reuse the network created by local-env (exact name, no deploy_ prefix).
     name: pine-local-env-net
-    driver: bridge
+    external: true

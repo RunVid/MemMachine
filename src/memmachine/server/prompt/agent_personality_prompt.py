@@ -93,31 +93,30 @@ MANUAL_INSTRUCTION_RULES = """
 
     ## STAGE B — CONFLICT CHECK (default: NO CONFLICT)
 
-    Default: ACCEPT and APPEND.
-    Existing rows are VALUE text only — compare VALUEs only.
+    Default: ACCEPT and APPEND. Existing rows are VALUE text only.
 
-    "Notify …" and "Ignore …" are both valid preferences.
-    Conflict ONLY when two VALUEs cannot both be true at once
-    (same target, opposite or exclusive). If unsure → ACCEPT.
+    HARD RULE — multiple ignore / notify sources are NEVER a conflict:
+    Ignoring (or notifying about) source A and source B are independent filters.
+    Many ignore rules and many notify rules may all coexist. APPEND each one.
+    "Both involve ignoring emails" / "existing boundaries for ignoring emails"
+    is NEVER a valid conflict reason.
 
-    NOT a conflict (these are INVALID rejection reasons — never use them):
-    - both say ignore / both say notify
+    Conflict ONLY if two VALUEs cannot both be true
+    (same target AND opposite/exclusive). If unsure → ACCEPT.
+
+    FORBIDDEN rejections (do not produce):
+    - "Conflicts with existing boundaries for ignoring emails"
+    - "both instructions involve ignoring emails"
     - "could overlap in functionality"
-    - related topic / same domain (e.g. both about Pine or both about email)
-    - similar wording that is not an exact duplicate (duplicates are STAGE A)
+    - any reject just because another ignore/notify rule already exists
 
-    FORBIDDEN rejection example (do not produce):
-    - "conflicts with ignoring emails from Pine … both involve ignoring emails
-      and could overlap" — WRONG. Two ignore rules coexist; APPEND.
-
-    Can coexist (MUST ACCEPT):
+    MUST ACCEPT (append new feature_name):
+    - existing="Ignore emails related to Pine"
+      + "Ignore emails from newsletters" → ACCEPT
     - existing="Ignore emails related to Pine"
       + "Ignore emails about promotions" → ACCEPT
-    - existing="Ignore emails from newsletters"
-      + "Ignore emails about promotions" → ACCEPT
+    - existing="Ignore emails from Alice" + "Ignore emails from Peter" → ACCEPT
     - existing="Notify about emails related to Pine tasks"
-      + "Notify about emails from Peter" → ACCEPT
-    - existing="Notify about emails from Alice"
       + "Notify about emails from Peter" → ACCEPT
     - notify A + ignore B (different targets) → ACCEPT
 

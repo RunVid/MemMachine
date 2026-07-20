@@ -101,23 +101,18 @@ MANUAL_INSTRUCTION_RULES = """
     2) DUPLICATE — if the instruction matches an existing value (same meaning /
        same text), reject as duplicate. Stop.
 
-    3) CLEAR LOGICAL CONFLICT — reject ONLY when an existing VALUE (or the new
-       instruction) literally uses exclusive "only" / cancel language
-       ("do not notify about…") such that both cannot be true.
-       Notification / filter scopes are INCLUDE lists: feature name
-       NOTIFICATION_SCOPE does NOT mean "only"; read the VALUE literally;
-       never invent "only".
-       NOT a conflict (must continue to step 4 / ACCEPT):
+    3) CLEAR LOGICAL CONFLICT — reject ONLY for a true cannot-both-be-true clash
+       (literal exclusive "only" / cancel language in a VALUE).
+       Scope is NEVER "only" and NEVER a conflict by itself:
+       NOTIFICATION_SCOPE / "Notify about emails from …" means INCLUDE, not
+       exclusive-only. Extending scope is always OK — ACCEPT and add a NEW
+       feature_name (do not reject, do not invent "only").
+       Example (must ACCEPT, new feature to extend scope):
        - existing NOTIFICATION_SCOPE="Notify about emails from Peter"
-         + "Notify about emails related to Pine tasks"
-       - existing="Notify about emails from Peter"
-         + "Notify about emails from Mike"
-       IS a conflict (REJECT here):
-       - existing="Only notify about emails from Peter"
-         + "Notify about emails from Mike"
-       - existing="Only notify about emails from Mike"
-         + "Only notify about emails from Peter"
-       If no clear literal conflict: do not reject; go to step 4.
+         + instruction="Notify about emails related to Pine tasks"
+         → ACCEPT; e.g. feature_name="NOTIFICATION SCOPE PINE TASKS",
+           value="Notify about emails related to Pine tasks"
+       Same for Peter then Mike, or any extra include criterion.
 
     4) ACCEPT and APPEND — map to one tag, pick a NEW feature_name, write a
        short stable value. Never merge or overwrite existing rows.

@@ -33,10 +33,10 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert "Sexual or explicit adult content" in prompt
     assert "DECISION ORDER" in prompt
     assert "CLEAR LOGICAL CONFLICT" in prompt
-    assert "INCLUDE lists" in prompt
+    assert "Scope is NEVER" in prompt
     assert "Notify about emails from Peter" in prompt
     assert "Notify about emails related to Pine tasks" in prompt
-    assert "never invent \"only\"" in prompt
+    assert "extend scope" in prompt
 
 
 def test_validate_manual_write_content_uses_prompt_file_blocklist():

@@ -69,7 +69,8 @@ Allowed tags:
 
 {safety_rules}
 
-Accept example:
+Accept example (existing NOTIFICATION_SCOPE="Notify about emails from Peter";
+extend scope with a NEW feature — not a conflict):
 {{
   "accepted": true,
   "rejection_reason": "",

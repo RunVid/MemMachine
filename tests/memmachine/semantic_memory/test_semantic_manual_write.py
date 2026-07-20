@@ -31,10 +31,9 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert "persona" in prompt
     assert MANUAL_INSTRUCTION_RULES.strip() in prompt
     assert "Sexual or explicit adult content" in prompt
-    assert "SAME-TOPIC WRITE" in prompt
-    assert "reuse the existing feature_name" in prompt
-    assert "Do NOT reject a boundaries instruction" in prompt
-    assert "Accept any instruction about how the agent should behave" in prompt
+    assert "append-only" in prompt
+    assert "Do NOT merge or overwrite" in prompt
+    assert "Do NOT reject for lacking a personality trait" in prompt
 
 
 def test_validate_manual_write_content_uses_prompt_file_blocklist():

@@ -37,66 +37,60 @@ MANUAL_WRITE_BLOCKED_CONTENT_PATTERNS: tuple[str, ...] = (
     r"\b(illegal|hack into|steal credentials|make bomb|child abuse)\b",
 )
 
-# Shared merge rules for ingest + manual write.
-COMPLEMENTARY_MERGE_RULES = """
-    ## SAME-TOPIC WRITE (CRITICAL)
+# Ingest + consolidation only (manual write stays append-only).
+SAME_TOPIC_WRITE_RULES = """
+    ## SAME-TOPIC LOGIC (CRITICAL — OVERRIDES GENERIC GUIDELINES)
 
-    Same topic → one feature. Prefer extend or update the existing value; do not
-    create a sibling feature, and do not wipe prior criteria by default.
+    One topic → exactly one feature. Never leave an old same-topic feature behind.
 
-    - Extend / update: new claim adds or refines the same topic → keep prior
-      criteria and incorporate the new ones into one value (reuse feature_name)
-    - An existing value that already says "only …" does NOT block later extend:
-      if a later claim adds another criterion on the same topic, MERGE both
-      (keep the old criterion and the new one)
-    - Replace only when the NEW claim itself is exclusive "only …" that clearly
-      drops prior criteria, or clearly conflicts with / cancels the previous rule
-    - Unrelated topics (different axes) may be separate features
-    - Exact duplicate value → skip / reject
-"""MANUAL_INSTRUCTION_RULES = f"""
+    Decision:
+    1) Exact duplicate of an existing value → no write
+    2) Same topic, new claim extends or updates it → REPLACE that feature:
+       delete the existing feature, then add one feature with the SAME feature_name
+       and a value that keeps prior criteria and includes the new ones
+    3) Same topic, NEW claim is exclusive "only …" or clearly conflicts → REPLACE:
+       delete existing, add the new rule alone
+    4) Different topic → add a new feature_name (do not touch unrelated features)
+
+    Notes:
+    - Old values that say "only …" can still be extended later; merge both criteria
+    - Reuse the exact existing feature_name for same-topic writes
+    - For ingest commands: same-topic change = delete THEN add (both required).
+      A lone add that leaves the old feature is WRONG.
+    - Ignore any generic guideline that says not to delete: for this category,
+      delete+add is the required way to extend/update/replace a feature
+"""
+
+MANUAL_INSTRUCTION_RULES = """
     ## INSTRUCTION WRITE RULES
 
+    - Manual writes are append-only: never update, merge, or reuse existing feature names
     - Map the instruction to exactly one best matching tag
-    - Prefer stable UPPERCASE feature names
+    - Pick a new concise UPPERCASE feature name for each accepted instruction
     - Store a short stable value describing the preference or rule, not the raw instruction
     - Compare carefully with existing features before deciding
-    - Accept tone, persona, style, and boundaries instructions; boundaries do not need to
-      sound like a personality trait
+    - Accept tone, persona, style, and boundaries; boundaries need not sound like
+      personality traits
 
     ## BOUNDARIES TAG
 
-    - Use `boundaries` for scope limits, filters, task/topic focus, notify/ignore rules,
-      and refusal patterns
-    - Do NOT reject a boundaries instruction for lacking a personality trait
-
-    {COMPLEMENTARY_MERGE_RULES}
-
-    When extending / updating the same topic:
-    - accepted=true
-    - reuse the existing feature_name
-    - value keeps prior criteria and includes the new ones
+    - Scope limits, filters, task/topic focus, notify/ignore rules, refusal patterns
+    - Do NOT reject for lacking a personality trait
 
     ## CONFLICT AND DUPLICATE HANDLING
 
-    - Reject (accepted=false) only for:
-      - exact duplicate of an existing value
-      - clear conflicts that cannot be reconciled
-      - safety / category violations
-    - Same-topic extend/update → accept into the existing feature
-    - Do NOT invent a second feature name for the same topic
-    - Do NOT replace with the new clause alone unless the NEW claim is exclusive
-      "only" or conflicts with the previous rule
-    - Prior text containing "only" is still extendable by later same-topic claims
+    - Reject when the instruction would duplicate an existing value under the same tag
+    - Reject when the proposed feature name already exists under the same tag
+    - Reject when the instruction overlaps or conflicts with an existing rule
+    - Set accepted=false with a clear rejection_reason for duplicates and conflicts
+    - Do NOT merge or overwrite existing features on manual write
 
     ## CATEGORY REJECTION
 
-    - Accept any instruction about how the agent should behave, respond, communicate, or
-      scope its actions (tone, persona, style, boundaries)
-    - Reject only content that is unrelated to agent behavior, or that involves sexual,
-      violent, or illegal content per the SAFETY rules
-    - Do not reject valid agent-behavior instructions for being too specific, operational,
-      or not sounding like a personality trait
+    - Accept agent behavior / communication / scope instructions
+    - Reject unrelated content, or sexual / violent / illegal content per SAFETY
 """
+
 CATEGORY_MANUAL_INSTRUCTION_CONFIG: dict[str, dict[str, object]] = {
     "agent_personality": {
         "tags": AGENT_PERSONALITY_TAGS,
@@ -115,6 +109,7 @@ def get_category_manual_instruction_config(category_name: str) -> dict[str, obje
         )
     return config
 
+
 AGENT_PERSONALITY_DESCRIPTION = f"""
     You extract stable AGENT personality / behavior settings from claims.
     Input is a claim (a stated agent setting or preference), not a chat conversation.
@@ -123,63 +118,46 @@ AGENT_PERSONALITY_DESCRIPTION = f"""
 
     ## YOUR ROLE
 
-    - Store reusable agent settings that should persist across sessions
-    - Prefer a clean, non-duplicative profile: update or delete before adding
-    - Ignore claims that are user personal facts or not about agent behavior
+    - Store reusable agent settings that persist across sessions
+    - Keep one clean feature per topic: extend/update/replace via delete+add
+    - Ignore user personal facts and one-off task requests
 
-    ALWAYS compare with existing features before creating new ones.
+    ALWAYS compare with existing features before writing.
 
     ## TAG RULES
 
-    Use only the tags listed below in this prompt (tone, persona, style, boundaries).
+    Use only the tags listed below (tone, persona, style, boundaries).
     - DO NOT create new tags — pick the closest match
     - Tags MUST be lowercase
-    - If unsure between tags, prefer:
-      - identity / character / role → persona
-      - how it sounds → tone
-      - response format / length / habits → style
-      - scope, filters, notify/ignore, refusals → boundaries
+    - If unsure: identity/role → persona; sound → tone; format/habits → style;
+      scope/filters/refusals → boundaries
 
     ## WHAT TO EXTRACT
 
-    Stable, reusable agent settings from the claim only. Tag meanings are defined
-    in the tag list below — do not invent other categories.
-
+    Stable agent settings only. Tag meanings are in the tag list below.
     Feature names: concise UPPERCASE with spaces.
-    Values: short stable preference/rule text — not a verbatim dump of the claim
-    when a clearer paraphrase exists.
+    Values: short stable preference/rule text.
 
     ## WHAT NOT TO EXTRACT
 
-    - User personal facts (name, job, preferences about the user themselves)
-    - Claims that are not about agent tone, persona, style, or boundaries
-    - One-off task requests with no lasting agent setting
-    - Content blocked by SAFETY rules below
+    - User personal facts
+    - Claims unrelated to tone / persona / style / boundaries
+    - One-off tasks with no lasting setting
+    - Content blocked by SAFETY below
 
-    {COMPLEMENTARY_MERGE_RULES}
+    {SAME_TOPIC_WRITE_RULES}
 
-    ## UPDATE WORKFLOW
-
-    1. Read existing features for the relevant tag
-    2. Exact duplicate → do nothing
-    3. Same topic → extend/update: delete old, add one feature with same feature_name
-       whose value keeps prior criteria and includes the new ones (even if the old
-       value said "only …")
-    4. NEW claim is exclusive "only …" that drops prior criteria, or clear conflict
-       → replace with the new rule
-    5. Unrelated topic → add with a new feature name
-    6. Never leave two features for the same topic side by side
-
-    Same-topic extend/update shape:
+    Required command shape for same-topic extend/update/replace:
     {{
         "0": {{"command": "delete", "tag": "<tag>", "feature": "<EXISTING FEATURE>"}},
         "1": {{
             "command": "add",
             "tag": "<tag>",
             "feature": "<EXISTING FEATURE>",
-            "value": "<prior criteria kept + new criteria>"
+            "value": "<result per decision rules>"
         }}
     }}
+    Never emit only the add for a same-topic change.
 
     {SAFETY_RULES}
 """
@@ -190,33 +168,16 @@ agent_personality_consolidation_prompt = (
 
     ## AGENT PERSONALITY CONSOLIDATION
 
-    All input memories share the same tag. Outputs MUST keep that same tag.
-    Allowed tags only: tone, persona, style, boundaries (lowercase).
+    All inputs share one tag; outputs must keep that tag.
+    Allowed tags: tone, persona, style, boundaries (lowercase).
 
-    ### Goal
-    Keep a small, clear set of stable agent settings. Remove redundancy and
-    extend/update same-topic rules into one feature.
+    {SAME_TOPIC_WRITE_RULES}
 
-    {COMPLEMENTARY_MERGE_RULES}
-
-    ### Workflow
-
-    Step 1: DELETE first (exclude id from keep_memories)
-    - Exact or near-duplicate values → keep one, drop rest
-    - Vague / unusable entries → delete
-    - Unsafe content → delete
-
-    Step 2: Merge within the same tag
-    - Same topic → one memory; value extends/updates prior criteria (keep old + new),
-      including when an older memory said "only …"
-    - NEW exclusive "only" or clear conflict → keep the winning rule only
-    - Unrelated topics → keep both
-
-    Step 3: Do NOT
-    - Create new tags
-    - Merge across different tags
-    - Invent user-profile facts
-    - Keep multiple memories for the same topic side by side
+    Consolidation means: for each topic, at most one surviving memory.
+    - Same topic → one consolidated memory; do NOT keep old ids in keep_memories
+    - Exclusive "only" / clear conflict → one winning memory; drop the rest
+    - Different topics → may keep both
+    - Never keep multiple memories for the same topic
     """
     + SAFETY_RULES
 )

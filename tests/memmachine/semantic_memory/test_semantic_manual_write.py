@@ -31,7 +31,7 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert "persona" in prompt
     assert MANUAL_INSTRUCTION_RULES.strip() in prompt
     assert "Sexual or explicit adult content" in prompt
-    assert "COMPLEMENTARY MERGE" in prompt
+    assert "SAME-TOPIC WRITE" in prompt
     assert "reuse the existing feature_name" in prompt
     assert "Do NOT reject a boundaries instruction" in prompt
     assert "Accept any instruction about how the agent should behave" in prompt

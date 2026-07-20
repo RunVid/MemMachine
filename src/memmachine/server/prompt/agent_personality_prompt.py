@@ -39,23 +39,21 @@ MANUAL_WRITE_BLOCKED_CONTENT_PATTERNS: tuple[str, ...] = (
 
 # Shared merge rules for ingest + manual write.
 COMPLEMENTARY_MERGE_RULES = """
-    ## COMPLEMENTARY MERGE (CRITICAL)
+    ## SAME-TOPIC WRITE (CRITICAL)
 
-    Rules about the SAME topic MUST live in ONE feature with a single merged value.
-    Do NOT create a second parallel feature. Do NOT reject as conflict.
+    Same topic → one feature. Prefer extend or update the existing value; do not
+    create a sibling feature, and do not wipe prior criteria by default.
 
-    Complementary = the new rule adds, refines, or narrows criteria on a topic that
-    already has a feature (same intent / same axis). Treat it as an update to that
-    feature:
-    - reuse the existing feature_name (do not invent a sibling name for the same topic)
-    - write a value that covers the old criteria AND the new criteria
-
-    Unrelated topics (different axes) may keep separate features under the same tag.
-    True contradictions (cannot both hold) → reject / skip; do not store both.
-    Exact duplicate of an existing value → reject / skip (no write).
-"""
-
-MANUAL_INSTRUCTION_RULES = f"""
+    - Extend / update: new claim adds or refines the same topic → keep prior
+      criteria and incorporate the new ones into one value (reuse feature_name)
+    - An existing value that already says "only …" does NOT block later extend:
+      if a later claim adds another criterion on the same topic, MERGE both
+      (keep the old criterion and the new one)
+    - Replace only when the NEW claim itself is exclusive "only …" that clearly
+      drops prior criteria, or clearly conflicts with / cancels the previous rule
+    - Unrelated topics (different axes) may be separate features
+    - Exact duplicate value → skip / reject
+"""MANUAL_INSTRUCTION_RULES = f"""
     ## INSTRUCTION WRITE RULES
 
     - Map the instruction to exactly one best matching tag
@@ -73,19 +71,22 @@ MANUAL_INSTRUCTION_RULES = f"""
 
     {COMPLEMENTARY_MERGE_RULES}
 
-    When merging complementary rules:
+    When extending / updating the same topic:
     - accepted=true
     - reuse the existing feature_name
-    - value = full merged rule covering old + new criteria
+    - value keeps prior criteria and includes the new ones
 
     ## CONFLICT AND DUPLICATE HANDLING
 
     - Reject (accepted=false) only for:
       - exact duplicate of an existing value
-      - true contradictions that cannot be merged
+      - clear conflicts that cannot be reconciled
       - safety / category violations
-    - Do NOT reject complementary extensions of an existing topic — merge them
+    - Same-topic extend/update → accept into the existing feature
     - Do NOT invent a second feature name for the same topic
+    - Do NOT replace with the new clause alone unless the NEW claim is exclusive
+      "only" or conflicts with the previous rule
+    - Prior text containing "only" is still extendable by later same-topic claims
 
     ## CATEGORY REJECTION
 
@@ -160,21 +161,23 @@ AGENT_PERSONALITY_DESCRIPTION = f"""
     ## UPDATE WORKFLOW
 
     1. Read existing features for the relevant tag
-    2. Exact duplicate value → do nothing
-    3. Complementary on the same topic → delete old feature(s), then add ONE merged
-       feature reusing the same feature_name
-    4. True contradiction / supersede → delete old, then add new
-    5. Unrelated distinct setting → add with a new feature name
-    6. NEVER leave two features for the same topic side by side
+    2. Exact duplicate → do nothing
+    3. Same topic → extend/update: delete old, add one feature with same feature_name
+       whose value keeps prior criteria and includes the new ones (even if the old
+       value said "only …")
+    4. NEW claim is exclusive "only …" that drops prior criteria, or clear conflict
+       → replace with the new rule
+    5. Unrelated topic → add with a new feature name
+    6. Never leave two features for the same topic side by side
 
-    Complementary merge shape (reuse existing feature name):
+    Same-topic extend/update shape:
     {{
         "0": {{"command": "delete", "tag": "<tag>", "feature": "<EXISTING FEATURE>"}},
         "1": {{
             "command": "add",
             "tag": "<tag>",
             "feature": "<EXISTING FEATURE>",
-            "value": "<merged rule covering old + new>"
+            "value": "<prior criteria kept + new criteria>"
         }}
     }}
 
@@ -192,7 +195,7 @@ agent_personality_consolidation_prompt = (
 
     ### Goal
     Keep a small, clear set of stable agent settings. Remove redundancy and
-    merge complementary rules so the agent profile stays easy to apply.
+    extend/update same-topic rules into one feature.
 
     {COMPLEMENTARY_MERGE_RULES}
 
@@ -204,11 +207,10 @@ agent_personality_consolidation_prompt = (
     - Unsafe content → delete
 
     Step 2: Merge within the same tag
-    - Same meaning, different wording → one consolidated memory
-    - Complementary rules on the same topic → MUST merge into ONE memory
-      (same feature name, combined value). Never keep them as siblings.
-    - True contradictions → keep the clearer/newer rule; drop the other
-    - Unrelated topics (different axes) → keep both
+    - Same topic → one memory; value extends/updates prior criteria (keep old + new),
+      including when an older memory said "only …"
+    - NEW exclusive "only" or clear conflict → keep the winning rule only
+    - Unrelated topics → keep both
 
     Step 3: Do NOT
     - Create new tags

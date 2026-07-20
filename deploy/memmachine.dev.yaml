@@ -1,5 +1,4 @@
-# Same as default compose naming, but prefix pine_local_env_ instead of deploy_
-name: pine_local_env
+name: pine-local-env
 
 services:
   # PostgreSQL with pgvector extension for MemMachine memory storage
@@ -93,3 +92,6 @@ volumes:
 
 networks:
   pine-local-env-net:
+    # Compose sanitizes project "-" to "_"; set exact name to keep hyphens.
+    name: pine-local-env_pine-local-env-net
+    external: true

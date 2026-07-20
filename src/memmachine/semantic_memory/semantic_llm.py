@@ -35,6 +35,16 @@ def _features_to_llm_format(
     return structured_features
 
 
+def _features_to_manual_values_format(
+    features: list[SemanticFeature],
+) -> dict[str, list[str]]:
+    """Manual conflict checks use VALUE text only — no feature names."""
+    by_tag: dict[str, list[str]] = {}
+    for feature in features:
+        by_tag.setdefault(feature.tag, []).append(feature.value)
+    return by_tag
+
+
 def _features_to_consolidation_format(
     features: list[SemanticFeature],
 ) -> list[dict[str, object]]:
@@ -112,8 +122,8 @@ async def llm_parse_manual_instruction(
 ) -> ManualInstructionParseResult:
     """Parse a free-form instruction into a structured semantic feature write."""
     user_prompt = (
-        "Existing features for this category:\n"
-        f"{json.dumps(_features_to_llm_format(existing_features))}\n\n"
+        "Existing values by tag (VALUE text only; no feature names):\n"
+        f"{json.dumps(_features_to_manual_values_format(existing_features))}\n\n"
         "User instruction:\n"
         f"{instruction}\n"
     )

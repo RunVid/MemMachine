@@ -93,35 +93,33 @@ MANUAL_INSTRUCTION_RULES = """
 
     ## STAGE B — CONFLICT CHECK (default: NO CONFLICT)
 
-    Default answer: NOT a conflict → ACCEPT and APPEND.
-    Two notify/include rules can always coexist. Different people or topics are
-    NOT conflicts. Do not invent exclusive "only".
+    Default: ACCEPT and APPEND.
+    Existing rows are VALUE text only — compare VALUEs only.
 
-    MUST ACCEPT (not conflict) — append NEW feature_name with a suffix:
-    - existing feature=NOTIFICATION_SCOPE,
-      value="Notify about emails from Alice"
-      + "Notify about emails from Peter"
-      → ACCEPT; feature_name="NOTIFICATION SCOPE PETER",
-        value="Notify about emails from Peter"
-    - existing feature=NOTIFICATION_SCOPE,
-      value="Notify about emails from Peter"
-      + "Notify about emails related to Pine tasks"
-      → ACCEPT; feature_name="NOTIFICATION SCOPE PINE TASKS",
-        value="Notify about emails related to Pine tasks"
-    - existing feature=NOTIFICATION SCOPE,
-      value="Notify about emails from Alice"
-      + "Notify about emails from Peter"
-      → ACCEPT (no "only" in either value → never conflict)
+    "Notify …" and "Ignore …" are both valid preferences.
+    Conflict ONLY when two VALUEs cannot both be true at once.
+    If they can coexist → ACCEPT. If unsure → ACCEPT.
 
-    Reject in STAGE B ONLY if NEW literally says exclusive "only" / cancel
-    language that cannot coexist with an existing value.
+    Can coexist (MUST ACCEPT):
+    - existing="Notify about emails related to Pine tasks"
+      + "Notify about emails from Peter" → ACCEPT
+    - existing="Notify about emails from Alice"
+      + "Notify about emails from Peter" → ACCEPT
+    - existing="Ignore emails from newsletters"
+      + "Ignore emails about promotions" → ACCEPT
+    - notify A + ignore B (different targets) → ACCEPT
+
+    True conflict (REJECT) — same target, opposite / exclusive:
+    - existing="Notify about emails from Peter"
+      + "Ignore emails from Peter" → REJECT
+    - existing="Only notify about emails from Alice"
+      + "Notify about emails from Peter" → REJECT
 
     ## STAGE C — WRITE (when accepted)
 
     - Append-only: never merge or overwrite
     - One tag: tone | persona | style | boundaries
-    - NEW UPPERCASE feature_name with distinguishing suffix; never reuse an
-      existing name
+    - NEW UPPERCASE feature_name with distinguishing suffix
     - Short stable value (not the raw instruction)
 """
 

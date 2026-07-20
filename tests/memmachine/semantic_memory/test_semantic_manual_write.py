@@ -4,6 +4,7 @@ import pytest
 
 from memmachine.semantic_memory.semantic_manual_write import (
     build_manual_instruction_system_prompt,
+    is_false_manual_conflict_rejection,
     normalize_manual_write_tag,
     unique_manual_feature_name,
     validate_manual_write_append,
@@ -35,10 +36,9 @@ def test_build_manual_instruction_system_prompt_loads_rules_from_prompt_file():
     assert "STAGE A" in prompt
     assert "STAGE B" in prompt
     assert "default: NO CONFLICT" in prompt
-    assert "Notify about emails from Alice" in prompt
-    assert "Notify about emails from Peter" in prompt
-    assert "MUST ACCEPT" in prompt
-    assert "distinguishing suffix" in prompt
+    assert "VALUE text only" in prompt
+    assert "Notify about emails related to Pine tasks" in prompt
+    assert "cannot both be true" in prompt
 
 
 def test_validate_manual_write_content_uses_prompt_file_blocklist():

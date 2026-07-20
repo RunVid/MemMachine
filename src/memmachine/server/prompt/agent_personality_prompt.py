@@ -28,7 +28,7 @@ SAFETY_RULES = """
     - Violence, harm, or instructions to hurt people
     - Illegal activity or instructions to break the law
 
-    If the conversation contains only unsafe content, return no add commands.
+    If the claim contains only unsafe content, return no add commands.
 """
 
 MANUAL_WRITE_BLOCKED_CONTENT_PATTERNS: tuple[str, ...] = (
@@ -99,17 +99,81 @@ def get_category_manual_instruction_config(category_name: str) -> dict[str, obje
     return config
 
 AGENT_PERSONALITY_DESCRIPTION = f"""
-    You extract stable agent personality traits from conversations.
-    Store only reusable persona settings for the agent, not one-off chat lines or user facts.
+    You extract stable AGENT personality / behavior settings from claims.
+    Input is a claim (a stated agent setting or preference), not a chat conversation.
+    These memories configure how the agent should sound, who it is, how it responds,
+    and what it should or should not do. They are NOT user profile facts.
 
-    ALWAYS compare with existing features before adding new ones.
-    Prefer updating or deleting existing features over creating duplicates.
+    ## YOUR ROLE
+
+    - Store reusable agent settings that should persist across sessions
+    - Prefer a clean, non-duplicative profile: update or delete before adding
+    - Ignore claims that are user personal facts or not about agent behavior
+
+    ALWAYS compare with existing features before creating new ones.
 
     ## TAG RULES
 
-    You MUST ONLY use: tone, persona, style, boundaries
-    - DO NOT create new tags
-    - Tags are lowercase and case-sensitive
+    Use only the tags listed below in this prompt (tone, persona, style, boundaries).
+    - DO NOT create new tags — pick the closest match
+    - Tags MUST be lowercase
+    - If unsure between tags, prefer:
+      - identity / character / role → persona
+      - how it sounds → tone
+      - response format / length / habits → style
+      - scope, filters, notify/ignore, refusals → boundaries
+
+    ## WHAT TO EXTRACT
+
+    Stable, reusable agent settings from the claim only. Tag meanings are defined
+    in the tag list below — do not invent other categories.
+
+    Examples:
+    - "Be warm but concise" → tag=tone, feature=WARMTH, value="Warm but concise"
+    - "You are a helpful copilot for Pine" → tag=persona, feature=ROLE,
+      value="Helpful copilot for Pine"
+    - "Prefer bullet points" → tag=style, feature=RESPONSE FORMAT,
+      value="Prefer bullet points"
+    - "Only notify me about emails related to Pine tasks" → tag=boundaries,
+      feature=NOTIFICATION_SCOPE,
+      value="Only notify about emails related to Pine tasks"
+
+    Feature names: concise UPPERCASE with spaces (e.g., "RESPONSE FORMAT").
+    Values: short stable preference/rule text — not a verbatim dump of the claim
+    when a clearer paraphrase exists.
+
+    ## WHAT NOT TO EXTRACT
+
+    - User personal facts (name, job, preferences about the user themselves)
+    - Claims that are not about agent tone, persona, style, or boundaries
+    - Content blocked by SAFETY rules below
+
+    Examples of INCORRECT extraction (DO NOT DO THIS):
+    - "My name is Alice" → user fact, not agent personality
+    - "Summarize this email now" → one-off task claim, not a lasting setting
+
+    ## UPDATE WORKFLOW
+
+    1. Read existing features for the relevant tag
+    2. If the claim duplicates an existing value → do nothing (no add)
+    3. If it conflicts with or supersedes an existing feature → delete old, then add new
+    4. If it is a distinct new setting → add with a new feature name
+    5. Prefer delete+add over stacking near-duplicates under the same tag
+
+    Update example (tone becomes less formal):
+    {{
+        "0": {{
+            "command": "delete",
+            "tag": "tone",
+            "feature": "FORMALITY"
+        }},
+        "1": {{
+            "command": "add",
+            "tag": "tone",
+            "feature": "FORMALITY",
+            "value": "Casual and friendly"
+        }}
+    }}
 
     {SAFETY_RULES}
 """
@@ -118,11 +182,44 @@ agent_personality_consolidation_prompt = (
     build_consolidation_prompt()
     + """
 
-    ## AGENT PERSONALITY RULES
+    ## AGENT PERSONALITY CONSOLIDATION
 
-    - Merge overlapping persona traits within the same tag
-    - Delete duplicates and near-duplicates; keep the clearest feature
-    - Do not keep redundant memories that express the same trait
+    All input memories share the same tag. Outputs MUST keep that same tag.
+    Allowed tags only: tone, persona, style, boundaries (lowercase).
+
+    ### Goal
+    Keep a small, clear set of stable agent settings. Remove redundancy and
+    near-duplicates so the agent profile stays easy to apply.
+
+    ### Workflow
+
+    Step 1: DELETE first (exclude id from keep_memories)
+    - Exact or near-duplicate values under the same feature → keep one, drop rest
+    - Vague / unusable entries → delete
+    - Unsafe content (sexual, violent, illegal) → delete
+
+    Step 2: Merge within the same tag
+    - Same meaning, different wording → delete sources, create one clear consolidated memory
+    - Same feature name, conflicting values → keep the newer/clearer rule; drop the rest
+    - Distinct settings (e.g. NOTIFICATION_SCOPE vs REFUSAL_POLICY) → keep both
+
+    Step 3: Do NOT
+    - Create new tags
+    - Merge across different tags
+    - Invent user-profile facts during consolidation
+    - Keep redundant memories that express the same trait
+
+    Example (near-duplicates → one memory):
+    - id=1 feature=WARMTH value="Be warm"
+    - id=2 feature=WARMTH value="Warm and friendly tone"
+    → keep_memories=[], consolidated_memories=[
+        {"tag": "tone", "feature": "WARMTH", "value": "Warm and friendly"}
+      ]
+
+    Example (distinct boundaries → keep both):
+    - id=3 feature=NOTIFICATION_SCOPE value="Only Pine-related emails"
+    - id=4 feature=REFUSAL_POLICY value="Decline medical diagnosis requests"
+    → keep_memories=["3", "4"], consolidated_memories=[]
     """
     + SAFETY_RULES
 )

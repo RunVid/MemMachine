@@ -239,6 +239,30 @@ class SpecDoc:
     SEMANTIC_IDS = """
     A list of unique IDs of semantic memories."""
 
+    WRITE_SEMANTIC_ISOLATION = """
+    Memory isolation scope for the semantic feature. `user` scopes to a user profile,
+    `role` scopes to an agent/role profile, and `session` scopes to a session."""
+
+    WRITE_SEMANTIC_USER_ID = """
+    User identifier for user-scoped semantic memory. Defaults to `project_id` when omitted."""
+
+    WRITE_SEMANTIC_ROLE_ID = """
+    Role or agent identifier. Required when `isolation` is `role`.
+    For list requests, when provided, only memories in
+    `mem_role_<org_id>/<project_id>/<role_id>` are returned."""
+
+    WRITE_SEMANTIC_SESSION_ID = """
+    Session identifier. Required when `isolation` is `session`."""
+
+    WRITE_SEMANTIC_CREATED = """
+    Whether a new semantic feature row was created. Manual writes are append-only, so
+    successful responses always return `true`. Failed duplicate or conflict checks return 422."""
+
+    WRITE_SEMANTIC_INSTRUCTION = """
+    Free-form settings instruction for semantic memory. The server validates the
+    instruction, maps it to tag/feature/value with an LLM, and appends a new feature.
+    Do not send tag, feature_name, or value from the settings UI."""
+
     STATUS = """
     The status code of the search operation. 0 typically indicates success.
     """
@@ -297,6 +321,15 @@ class Examples:
     EPISODIC_IDS: ClassVar[list[list[str]]] = [["123", "345"], ["23"]]
     SEMANTIC_ID: ClassVar[list[str]] = ["12", "23"]
     SEMANTIC_IDS: ClassVar[list[list[str]]] = [["123", "345"], ["23"]]
+    WRITE_SEMANTIC_ISOLATION: ClassVar[list[str]] = ["user", "role", "session"]
+    WRITE_SEMANTIC_CATEGORY: ClassVar[list[str]] = ["profile", "agent_personality"]
+    WRITE_SEMANTIC_TAG: ClassVar[list[str]] = ["preferences", "tone"]
+    WRITE_SEMANTIC_FEATURE_NAME: ClassVar[list[str]] = ["language", "formality"]
+    WRITE_SEMANTIC_VALUE: ClassVar[list[str]] = ["Prefers Python over JavaScript"]
+    WRITE_SEMANTIC_INSTRUCTION: ClassVar[list[str]] = [
+        "Be more casual and use bullet points",
+    ]
+    WRITE_SEMANTIC_CREATED: ClassVar[list[bool]] = [True, False]
     SEARCH_RESULT_STATUS: ClassVar[list[int]] = [0]
     SERVER_VERSION: ClassVar[list[str]] = ["0.1.2", "0.2.0"]
     CLIENT_VERSION: ClassVar[list[str]] = ["0.1.2", "0.2.0"]
@@ -390,6 +423,10 @@ class RouterDoc:
     - If `types` only contains `"semantic"`, memories are added only to Semantic memory
     - If `types` contains both, memories are added to both types
 
+    When a message includes `role_id` in metadata and semantic memory is requested,
+    the message is queued only for role semantic prompts (`prompt.role`) and not for
+    user profile prompts (`prompt.profile`), even if `user_id` is also present.
+
     Each memory message represents a discrete piece of information to be stored
     in the project's memory system. Messages can include content, metadata,
     timestamps, and other contextual details.
@@ -419,6 +456,11 @@ class RouterDoc:
 
     The filter field allows for filtering based on metadata key-value pairs.
     The type field allows specifying which memory type to list.
+
+    For semantic memory, optional scope fields select which set_ids to query:
+    - If `role_id` is provided, only that project-scoped role set
+      (`mem_role_<org_id>/<project_id>/<role_id>`) is listed.
+    - Otherwise the default is user profile (`project_id`) plus the project session.
     """
 
     DELETE_EPISODIC_MEMORY = """
@@ -431,6 +473,42 @@ class RouterDoc:
 
     If any of the specified episodic memories do not exist, a not-found error
     is returned for those entries.
+    """
+
+    WRITE_SEMANTIC_ISOLATION = """
+    Memory isolation scope for the semantic feature. `user` scopes to a user profile,
+    `role` scopes to an agent/role profile, and `session` scopes to a session."""
+
+    WRITE_SEMANTIC_USER_ID = """
+    User identifier for user-scoped semantic memory. Defaults to `project_id` when omitted."""
+
+    WRITE_SEMANTIC_ROLE_ID = """
+    Role or agent identifier. Required when `isolation` is `role`."""
+
+    WRITE_SEMANTIC_SESSION_ID = """
+    Session identifier. Required when `isolation` is `session`."""
+
+    WRITE_SEMANTIC_CREATED = """
+    Whether a new semantic feature row was created. Manual writes are append-only, so
+    successful responses always return `true`. Failed duplicate or conflict checks return 422."""
+
+    WRITE_SEMANTIC_INSTRUCTION = """
+    Free-form settings instruction for semantic memory. The server validates the
+    instruction, maps it to tag/feature/value with an LLM, and appends a new feature.
+    Do not send tag, feature_name, or value from the settings UI."""
+
+    WRITE_SEMANTIC_MEMORY = """
+    Append a semantic memory feature from a settings instruction, bypassing episodic
+    storage and async ingestion.
+
+    Required fields: category and instruction. Optional scope fields select the memory
+    set via isolation (`user`, `role`, or `session`).
+
+    The server validates safety and category fit, rejects duplicates and conflicts with
+    existing features, then appends a new row. It never updates existing features.
+
+    Use this endpoint for settings-side persona edits. Conversation-driven extraction
+    should continue to use `POST /memories`.
     """
 
     DELETE_SEMANTIC_MEMORY = """

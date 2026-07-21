@@ -25,6 +25,8 @@ from memmachine.common.api.spec import (
     MemoryMessage,
     SearchMemoriesSpec,
     SearchResult,
+    WriteSemanticMemoryResponse,
+    WriteSemanticMemorySpec,
 )
 
 if TYPE_CHECKING:
@@ -615,6 +617,65 @@ class Memory:
         else:
             logger.info("Semantic memory %s deleted successfully", semantic_id)
             return True
+
+    def write_semantic_instruction(
+        self,
+        *,
+        category: str,
+        instruction: str,
+        isolation: str = "role",
+        user_id: str = "",
+        role_id: str = "",
+        session_id: str = "",
+        timeout: int | None = None,
+    ) -> WriteSemanticMemoryResponse:
+        """
+        Append semantic memory from a settings instruction.
+
+        Args:
+            category: Semantic category name (e.g. `agent_personality`)
+            instruction: Free-form settings instruction
+            isolation: Memory scope (`user`, `role`, or `session`)
+            user_id: User identifier for user-scoped memory
+            role_id: Role/agent identifier for role-scoped memory
+            session_id: Session identifier for session-scoped memory
+            timeout: Request timeout in seconds (uses client default if not provided)
+
+        Returns:
+            WriteSemanticMemoryResponse with semantic_id, created, tag, feature_name, value
+
+        Raises:
+            requests.RequestException: If the request fails
+            RuntimeError: If the client has been closed
+
+        """
+        if self._client_closed:
+            raise RuntimeError("Cannot write semantic memory: client has been closed")
+
+        spec = WriteSemanticMemorySpec(
+            org_id=self.__org_id,
+            project_id=self.__project_id,
+            category=category,
+            instruction=instruction,
+            isolation=isolation,
+            user_id=user_id,
+            role_id=role_id,
+            session_id=session_id,
+        )
+        v2_data = spec.model_dump(mode="json", exclude_none=True)
+
+        try:
+            response = self.client.request(
+                "POST",
+                f"{self.client.base_url}/api/v2/memories/semantic",
+                json=v2_data,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return WriteSemanticMemoryResponse(**response.json())
+        except Exception:
+            logger.exception("Failed to write semantic memory from instruction")
+            raise
 
     def get_default_filter_dict(self) -> dict[str, str]:
         """

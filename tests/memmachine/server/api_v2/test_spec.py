@@ -13,6 +13,8 @@ from memmachine.common.api.spec import (
     DeleteEpisodicMemorySpec,
     DeleteProjectSpec,
     DeleteSemanticMemorySpec,
+    WriteSemanticMemorySpec,
+    WriteSemanticMemoryResponse,
     InvalidNameError,
     ListMemoriesSpec,
     MemoryMessage,
@@ -208,6 +210,9 @@ def test_list_memories_spec():
     assert spec.page_num == 0
     assert spec.filter == ""
     assert spec.type is None
+    assert spec.user_id == ""
+    assert spec.role_id == ""
+    assert spec.session_id == ""
 
 
 def test_delete_episodic_memory_spec():
@@ -228,6 +233,43 @@ def test_delete_semantic_memory_spec():
     assert spec.org_id == DEFAULT_ORG_AND_PROJECT_ID
     assert spec.project_id == DEFAULT_ORG_AND_PROJECT_ID
     assert spec.semantic_id == "sem-123"
+
+
+def test_write_semantic_memory_spec():
+    with pytest.raises(ValidationError) as exc_info:
+        WriteSemanticMemorySpec()
+    assert_pydantic_errors(
+        exc_info,
+        {"category": "missing", "instruction": "missing"},
+    )
+
+    spec = WriteSemanticMemorySpec(
+        category="agent_personality",
+        instruction="Be more casual and use bullet points",
+        isolation="role",
+        role_id="agent-42",
+    )
+    assert spec.isolation.value == "role"
+    assert spec.role_id == "agent-42"
+
+    with pytest.raises(ValidationError) as exc_info:
+        WriteSemanticMemorySpec(
+            category="agent_personality",
+            instruction="Be more casual",
+            isolation="role",
+        )
+    assert "role_id is required" in str(exc_info.value)
+
+    with pytest.raises(ValidationError) as exc_info:
+        WriteSemanticMemorySpec(
+            category="agent_personality",
+            instruction="   ",
+        )
+    assert "instruction is required" in str(exc_info.value)
+
+    response = WriteSemanticMemoryResponse(semantic_id="42", created=True)
+    assert response.semantic_id == "42"
+    assert response.created is True
 
 
 def test_get_semantic_ids():

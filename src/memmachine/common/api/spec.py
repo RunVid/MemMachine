@@ -703,6 +703,27 @@ class ListMemoriesSpec(_WithOrgAndProj):
             examples=Examples.MEMORY_TYPE_SINGLE,
         ),
     ]
+    user_id: Annotated[
+        SafeId,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_USER_ID,
+        ),
+    ]
+    role_id: Annotated[
+        SafeId,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_ROLE_ID,
+        ),
+    ]
+    session_id: Annotated[
+        SafeId,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_SESSION_ID,
+        ),
+    ]
 
 
 class DeleteEpisodicMemorySpec(_WithOrgAndProj):
@@ -742,6 +763,105 @@ class DeleteEpisodicMemorySpec(_WithOrgAndProj):
 
 
 # ---
+
+
+class SemanticIsolation(str, Enum):
+    """Isolation scope for direct semantic memory writes."""
+
+    USER = "user"
+    ROLE = "role"
+    SESSION = "session"
+
+
+class WriteSemanticMemorySpec(_WithOrgAndProj):
+    """Specification model for appending semantic memory from a settings instruction."""
+
+    category: Annotated[
+        str,
+        Field(..., description=SpecDoc.SEMANTIC_CATEGORY, examples=Examples.WRITE_SEMANTIC_CATEGORY),
+    ]
+    instruction: Annotated[
+        str,
+        Field(
+            ...,
+            description=SpecDoc.WRITE_SEMANTIC_INSTRUCTION,
+            examples=Examples.WRITE_SEMANTIC_INSTRUCTION,
+        ),
+    ]
+    isolation: Annotated[
+        SemanticIsolation,
+        Field(
+            default=SemanticIsolation.USER,
+            description=SpecDoc.WRITE_SEMANTIC_ISOLATION,
+            examples=Examples.WRITE_SEMANTIC_ISOLATION,
+        ),
+    ]
+    user_id: Annotated[
+        SafeId,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_USER_ID,
+        ),
+    ]
+    role_id: Annotated[
+        SafeId,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_ROLE_ID,
+        ),
+    ]
+    session_id: Annotated[
+        SafeId,
+        Field(
+            default="",
+            description=SpecDoc.WRITE_SEMANTIC_SESSION_ID,
+        ),
+    ]
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> Self:
+        """Ensure the request includes the identifier required by the isolation scope."""
+        if self.isolation == SemanticIsolation.ROLE and not self.role_id.strip():
+            raise ValueError("role_id is required when isolation is 'role'")
+        if self.isolation == SemanticIsolation.SESSION and not self.session_id.strip():
+            raise ValueError("session_id is required when isolation is 'session'")
+        return self
+
+    @model_validator(mode="after")
+    def validate_instruction(self) -> Self:
+        """Ensure the settings instruction is non-empty."""
+        if not self.instruction.strip():
+            raise ValueError("instruction is required")
+        return self
+
+
+class WriteSemanticMemoryResponse(BaseModel):
+    """Response model for direct semantic memory writes."""
+
+    semantic_id: Annotated[
+        SafeId,
+        Field(..., description=SpecDoc.SEMANTIC_METADATA_ID, examples=Examples.SEMANTIC_ID),
+    ]
+    created: Annotated[
+        bool,
+        Field(
+            ...,
+            description=SpecDoc.WRITE_SEMANTIC_CREATED,
+            examples=Examples.WRITE_SEMANTIC_CREATED,
+        ),
+    ]
+    tag: Annotated[
+        str,
+        Field(default="", description=SpecDoc.SEMANTIC_TAG),
+    ]
+    feature_name: Annotated[
+        str,
+        Field(default="", description=SpecDoc.SEMANTIC_FEATURE_NAME),
+    ]
+    value: Annotated[
+        str,
+        Field(default="", description=SpecDoc.SEMANTIC_VALUE),
+    ]
 
 
 class DeleteSemanticMemorySpec(_WithOrgAndProj):

@@ -13,6 +13,7 @@ from memmachine.common.errors import (
     SessionNotFoundError,
 )
 from memmachine.main.memmachine import ALL_MEMORY_TYPES, MemoryType
+from memmachine.semantic_memory.semantic_session_manager import IsolationType
 from memmachine.server.api_v2.router import RestError, get_memmachine
 from memmachine.server.api_v2.service import _SessionData
 from memmachine.server.app import MemMachineAPI
@@ -278,6 +279,64 @@ def test_add_memories_episode_type_forwarded(client, mock_memmachine):
     assert episode_entries[1].episode_type is None
 
 
+def test_add_memories_role_id_queues_role_semantic_only(client, mock_memmachine):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "types": ["semantic"],
+        "messages": [
+            {
+                "role": "user",
+                "content": "Be more casual from now on",
+                "metadata": {
+                    "user_id": "alice",
+                    "role_id": "agent-42",
+                    "session_id": "chat-1",
+                },
+            }
+        ],
+    }
+
+    mock_memmachine.add_episodes.return_value = ["ep-1"]
+
+    response = client.post("/api/v2/memories", json=payload)
+    assert response.status_code == 200
+
+    call_kwargs = mock_memmachine.add_episodes.call_args[1]
+    assert call_kwargs["semantic_isolation"] == [IsolationType.ROLE]
+
+
+def test_add_memories_without_role_id_keeps_user_session_isolation(
+    client, mock_memmachine
+):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "types": ["semantic"],
+        "messages": [
+            {
+                "role": "user",
+                "content": "My name is Alice",
+                "metadata": {
+                    "user_id": "alice",
+                    "session_id": "chat-1",
+                },
+            }
+        ],
+    }
+
+    mock_memmachine.add_episodes.return_value = ["ep-1"]
+
+    response = client.post("/api/v2/memories", json=payload)
+    assert response.status_code == 200
+
+    call_kwargs = mock_memmachine.add_episodes.call_args[1]
+    assert call_kwargs["semantic_isolation"] == [
+        IsolationType.USER,
+        IsolationType.SESSION,
+    ]
+
+
 def test_search_memories(client, mock_memmachine):
     payload = {
         "org_id": "test_org",
@@ -372,6 +431,36 @@ def test_list_memories(client, mock_memmachine):
     assert "semantic_memory" not in data["content"]
 
     mock_memmachine.list_search.assert_awaited_once()
+    kwargs = mock_memmachine.list_search.await_args.kwargs
+    assert kwargs["semantic_isolation"] == [
+        IsolationType.USER,
+        IsolationType.SESSION,
+    ]
+
+
+def test_list_memories_with_role_id_queries_role_only(client, mock_memmachine):
+    payload = {
+        "org_id": "agent1",
+        "project_id": "user_123",
+        "type": "semantic",
+        "role_id": "copilot",
+    }
+
+    mock_results = MagicMock()
+    mock_results.episodic_memory = None
+    mock_results.semantic_memory = []
+    mock_memmachine.list_search.return_value = mock_results
+
+    response = client.post("/api/v2/memories/list", json=payload)
+    assert response.status_code == 200
+
+    mock_memmachine.list_search.assert_awaited_once()
+    args = mock_memmachine.list_search.await_args
+    session_data = args.kwargs["session_data"]
+    assert session_data.user_id is None
+    assert session_data.role_id == "copilot"
+    assert session_data.role_profile_id == "agent1/user_123/copilot"
+    assert args.kwargs["semantic_isolation"] == [IsolationType.ROLE]
 
 
 def test_delete_episodic_memory(client, mock_memmachine):
@@ -498,6 +587,86 @@ def test_delete_semantic_memories_empty(client, mock_memmachine):
     assert response.status_code == 422
     response_detail = response.json()["detail"]
     assert "At least one semantic ID" in response_detail["message"]
+
+
+def test_write_semantic_memory(client, mock_memmachine):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "category": "agent_personality",
+        "instruction": "Be more casual and use bullet points",
+        "isolation": "role",
+        "role_id": "agent-42",
+    }
+
+    mock_memmachine.write_semantic_from_instruction.return_value = (
+        "style",
+        "RESPONSE FORMAT",
+        "Use bullet points",
+        "42",
+        True,
+    )
+
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 200
+    assert response.json() == {
+        "semantic_id": "42",
+        "created": True,
+        "tag": "style",
+        "feature_name": "RESPONSE FORMAT",
+        "value": "Use bullet points",
+    }
+    mock_memmachine.write_semantic_from_instruction.assert_awaited_once()
+    write_session = mock_memmachine.write_semantic_from_instruction.await_args.kwargs[
+        "session_data"
+    ]
+    assert write_session.role_id == "agent-42"
+    assert write_session.role_profile_id == "test_org/test_proj/agent-42"
+
+    mock_memmachine.write_semantic_from_instruction.reset_mock()
+    mock_memmachine.write_semantic_from_instruction.side_effect = ValueError(
+        "Duplicate: value already exists under feature 'RESPONSE FORMAT' in tag 'style'",
+    )
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 422
+    assert "Duplicate:" in response.json()["detail"]["internal_error"]
+
+    mock_memmachine.write_semantic_from_instruction.reset_mock()
+    mock_memmachine.write_semantic_from_instruction.side_effect = ValueError("Invalid")
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 422
+    assert "invalid argument" in response.json()["detail"]["message"]
+
+    mock_memmachine.write_semantic_from_instruction.reset_mock()
+    mock_memmachine.write_semantic_from_instruction.side_effect = Exception("Error")
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 500
+    assert "Unable to write semantic memory" in response.json()["detail"]["message"]
+
+
+def test_write_semantic_memory_requires_instruction(client, mock_memmachine):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "category": "agent_personality",
+        "isolation": "role",
+        "role_id": "agent-42",
+    }
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 422
+
+
+def test_write_semantic_memory_requires_role_id(client, mock_memmachine):
+    payload = {
+        "org_id": "test_org",
+        "project_id": "test_proj",
+        "category": "agent_personality",
+        "instruction": "Be more casual",
+        "isolation": "role",
+    }
+    response = client.post("/api/v2/memories/semantic", json=payload)
+    assert response.status_code == 422
+    assert "role_id is required" in response.json()["detail"][0]["msg"]
 
 
 def test_metrics(client):

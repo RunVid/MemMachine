@@ -35,6 +35,16 @@ def _features_to_llm_format(
     return structured_features
 
 
+def _features_to_manual_values_format(
+    features: list[SemanticFeature],
+) -> dict[str, list[str]]:
+    """Manual conflict checks use VALUE text only — no feature names."""
+    by_tag: dict[str, list[str]] = {}
+    for feature in features:
+        by_tag.setdefault(feature.tag, []).append(feature.value)
+    return by_tag
+
+
 def _features_to_consolidation_format(
     features: list[SemanticFeature],
 ) -> list[dict[str, object]]:
@@ -90,6 +100,47 @@ async def llm_feature_update(
         parsed_output,
     )
     return validated_output.commands
+
+
+class ManualInstructionParseResult(BaseModel):
+    """LLM output for parsing a free-form manual semantic write instruction."""
+
+    accepted: bool
+    rejection_reason: str = ""
+    tag: str = ""
+    feature_name: str = ""
+    value: str = ""
+
+
+@validate_call
+async def llm_parse_manual_instruction(
+    *,
+    instruction: str,
+    existing_features: list[SemanticFeature],
+    model: InstanceOf[LanguageModel],
+    system_prompt: str,
+) -> ManualInstructionParseResult:
+    """Parse a free-form instruction into a structured semantic feature write."""
+    user_prompt = (
+        "Existing values by tag (VALUE text only; no feature names):\n"
+        f"{json.dumps(_features_to_manual_values_format(existing_features))}\n\n"
+        "User instruction:\n"
+        f"{instruction}\n"
+    )
+
+    parsed_output = await model.generate_parsed_response(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        output_format=ManualInstructionParseResult,
+    )
+
+    if parsed_output is None:
+        return ManualInstructionParseResult(
+            accepted=False,
+            rejection_reason="Unable to parse instruction",
+        )
+
+    return TypeAdapter(ManualInstructionParseResult).validate_python(parsed_output)
 
 
 class LLMReducedFeature(BaseModel):

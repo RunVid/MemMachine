@@ -262,6 +262,7 @@ class MemMachine:
         episode_entries: list[EpisodeEntry],
         *,
         target_memories: list[MemoryType] = ALL_MEMORY_TYPES,
+        semantic_isolation: list[IsolationType] | None = None,
     ) -> list[EpisodeIdT]:
         episode_storage = await self._resources.get_episode_storage()
         episodes = await episode_storage.add_episodes(
@@ -290,10 +291,16 @@ class MemMachine:
             semantic_session_manager = (
                 await self._resources.get_semantic_session_manager()
             )
+            memory_type = (
+                semantic_isolation
+                if semantic_isolation is not None
+                else ALL_ISOLATION_TYPES
+            )
             tasks.append(
                 semantic_session_manager.add_message(
                     episode_ids=episode_ids,
                     session_data=session_data,
+                    memory_type=memory_type,
                 )
             )
 
@@ -408,8 +415,12 @@ class MemMachine:
         search_filter: str | None = None,
         page_size: int | None = None,
         page_num: int | None = None,
+        semantic_isolation: list[IsolationType] | None = None,
     ) -> ListResults:
         search_filter_expr = parse_filter(search_filter) if search_filter else None
+        isolation = (
+            semantic_isolation if semantic_isolation is not None else ALL_ISOLATION_TYPES
+        )
 
         episodic_task: Task | None = None
         semantic_task: Task | None = None
@@ -438,6 +449,7 @@ class MemMachine:
             semantic_task = asyncio.create_task(
                 semantic_session.get_set_features(
                     session_data=session_data,
+                    memory_type=isolation,
                     search_filter=search_filter_expr,
                     page_size=page_size,
                     page_num=page_num,
@@ -505,6 +517,22 @@ class MemMachine:
     ) -> None:
         semantic_session = await self._resources.get_semantic_session_manager()
         await semantic_session.delete_features(feature_ids)
+
+    async def write_semantic_from_instruction(
+        self,
+        session_data: InstanceOf[SessionData],
+        *,
+        isolation: IsolationType,
+        category_name: str,
+        instruction: str,
+    ) -> tuple[str, str, str, FeatureIdT, bool]:
+        semantic_session = await self._resources.get_semantic_session_manager()
+        return await semantic_session.write_from_instruction(
+            session_data=session_data,
+            memory_type=isolation,
+            category_name=category_name,
+            instruction=instruction,
+        )
 
     async def trigger_consolidation(
         self,

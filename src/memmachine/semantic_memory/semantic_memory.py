@@ -17,7 +17,7 @@ import numpy as np
 from pydantic import BaseModel, InstanceOf
 
 from memmachine.common.episode_store import EpisodeIdT, EpisodeStorage
-from memmachine.common.filter.filter_parser import FilterExpr
+from memmachine.common.filter.filter_parser import And, Comparison, FilterExpr
 
 from .semantic_ingestion import IngestionService
 from .semantic_model import FeatureIdT, ResourceRetriever, SemanticFeature, SetIdT
@@ -180,6 +180,133 @@ class SemanticService:
             await self._semantic_storage.add_citations(f_id, citations)
 
         return f_id
+
+    async def append_feature(
+        self,
+        *,
+        set_id: SetIdT,
+        category_name: str,
+        feature: str,
+        value: str,
+        tag: str,
+        metadata: dict[str, Any] | None = None,
+        citations: list[EpisodeIdT] | None = None,
+    ) -> tuple[FeatureIdT, bool]:
+        filter_expr = And(
+            left=And(
+                left=Comparison(field="set_id", op="=", value=set_id),
+                right=Comparison(field="category_name", op="=", value=category_name),
+            ),
+            right=Comparison(field="tag", op="=", value=tag),
+        )
+        existing_features = await self._semantic_storage.get_feature_set(
+            filter_expr=filter_expr,
+        )
+        from memmachine.semantic_memory.semantic_manual_write import (
+            validate_manual_write_append,
+        )
+
+        append_error = validate_manual_write_append(
+            existing_features=existing_features,
+            tag=tag,
+            feature_name=feature,
+            value=value,
+        )
+        if append_error is not None:
+            raise ValueError(append_error)
+
+        feature_id = await self.add_new_feature(
+            set_id=set_id,
+            category_name=category_name,
+            feature=feature,
+            value=value,
+            tag=tag,
+            metadata=metadata,
+            citations=citations,
+        )
+        return feature_id, True
+
+    async def apply_manual_instruction(
+        self,
+        *,
+        set_id: SetIdT,
+        category_name: str,
+        instruction: str,
+    ) -> tuple[str, str, str, FeatureIdT, bool]:
+        from memmachine.semantic_memory.semantic_llm import llm_parse_manual_instruction
+        from memmachine.semantic_memory.semantic_manual_write import (
+            build_manual_instruction_system_prompt,
+            normalize_manual_write_tag,
+            unique_manual_feature_name,
+            validate_manual_write_append,
+            validate_manual_write_content,
+        )
+
+        normalized_instruction = instruction.strip()
+        if normalized_instruction == "":
+            raise ValueError("Validation error: instruction cannot be empty")
+
+        system_prompt = build_manual_instruction_system_prompt(
+            category_name=category_name,
+        )
+
+        filter_expr = And(
+            left=Comparison(field="set_id", op="=", value=set_id),
+            right=Comparison(field="category_name", op="=", value=category_name),
+        )
+        existing_features = await self._semantic_storage.get_feature_set(
+            filter_expr=filter_expr,
+        )
+
+        resources = self._resource_retriever.get_resources(set_id)
+        parsed = await llm_parse_manual_instruction(
+            instruction=normalized_instruction,
+            existing_features=existing_features,
+            model=resources.language_model,
+            system_prompt=system_prompt,
+        )
+        if not parsed.accepted:
+            reason = parsed.rejection_reason or "Instruction rejected"
+            if not reason.startswith(("Validation error:", "Duplicate:", "Conflict:")):
+                reason = f"Conflict: {reason}"
+            raise ValueError(reason)
+
+        feature_name = parsed.feature_name.strip()
+        value = parsed.value.strip()
+        if parsed.tag.strip() == "" or feature_name == "" or value == "":
+            raise ValueError(
+                "Validation error: instruction could not be mapped to a valid semantic feature",
+            )
+
+        tag = normalize_manual_write_tag(
+            category_name=category_name,
+            tag=parsed.tag,
+        )
+        validate_manual_write_content(category_name=category_name, value=value)
+
+        append_error = validate_manual_write_append(
+            existing_features=existing_features,
+            tag=tag,
+            feature_name=feature_name,
+            value=value,
+        )
+        if append_error is not None:
+            raise ValueError(append_error)
+
+        feature_name = unique_manual_feature_name(
+            existing_features=existing_features,
+            tag=tag,
+            feature_name=feature_name,
+        )
+
+        feature_id, created = await self.append_feature(
+            set_id=set_id,
+            category_name=category_name,
+            feature=feature_name,
+            value=value,
+            tag=tag,
+        )
+        return tag, feature_name, value, feature_id, created
 
     async def get_feature(
         self,

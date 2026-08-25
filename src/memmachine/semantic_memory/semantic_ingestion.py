@@ -74,6 +74,7 @@ class IngestionService:
             max(1, INGESTION_MAX_CONCURRENT_SETS),
         )
         self._owner_id = f"{socket.gethostname()}-{os.getpid()}"
+        self._background_tasks: set[asyncio.Task[None]] = set()
 
     async def process_set_ids(self, set_ids: list[SetIdT]) -> None:
         """Process ingestion for multiple set_ids with bounded concurrency."""
@@ -147,7 +148,6 @@ class IngestionService:
                         stop.wait(),
                         timeout=INGESTION_LOCK_RENEW_INTERVAL_SECONDS,
                     )
-                    return
                 except TimeoutError:
                     renewed = await self._semantic_storage.renew_ingestion_lock(
                         set_id=set_id,
@@ -161,8 +161,12 @@ class IngestionService:
                             self._owner_id,
                         )
                         return
+                else:
+                    return
 
         heartbeat_task = asyncio.create_task(_heartbeat())
+        self._background_tasks.add(heartbeat_task)
+        heartbeat_task.add_done_callback(self._background_tasks.discard)
         try:
             yield None
         finally:
@@ -198,7 +202,9 @@ class IngestionService:
             finally:
                 await self.release_set_lock(set_id)
 
-        _ = asyncio.create_task(_run())
+        task = asyncio.create_task(_run())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
         return True
 
     async def _process_single_set(self, set_id: str) -> None:
@@ -613,7 +619,7 @@ class IngestionService:
 
         await asyncio.gather(*category_tasks)
 
-    async def _deduplicate_features(
+    async def _deduplicate_features(  # noqa: C901
         self,
         *,
         set_id: str,
@@ -671,7 +677,9 @@ class IngestionService:
         # that source memories are properly excluded from keep_memories to avoid duplicates
         if len(consolidate_resp.consolidated_memories) > 0:
             # Get all memory IDs that exist
-            existing_ids = {m.metadata.id for m in memories if m.metadata.id is not None}
+            existing_ids = {
+                m.metadata.id for m in memories if m.metadata.id is not None
+            }
             kept_ids = set(consolidate_resp.keep_memories)
 
             # Calculate how many memories will be deleted

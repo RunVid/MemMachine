@@ -194,6 +194,7 @@ class SemanticStorage(ABC):
 
         Returns:
             True if lock was acquired, False if another owner holds it
+
         """
         raise NotImplementedError
 
@@ -209,6 +210,7 @@ class SemanticStorage(ABC):
 
         Returns:
             True if this owner still holds the lock, False if it was lost
+
         """
         raise NotImplementedError
 
@@ -220,13 +222,14 @@ class SemanticStorage(ABC):
     ) -> None:
         """
         Release an ingestion lock held by this owner.
-        
+
         Should be called in a finally block to ensure locks are released
         even if processing fails.
-        
+
         Args:
             set_id: The set to unlock
             owner_id: The owner that acquired the lock
+
         """
         raise NotImplementedError
 
@@ -234,7 +237,7 @@ class SemanticStorage(ABC):
     async def cleanup_expired_ingestion_locks(self) -> None:
         """
         Remove ingestion locks that have expired based on their timeout.
-        
+
         Prevents deadlocks when a pod crashes while holding a lock.
         Should be called periodically by the background ingestion task.
         """

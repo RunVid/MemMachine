@@ -532,7 +532,7 @@ class RouterDoc:
     processing new messages, but this endpoint allows manual triggering for:
 
     - Fixing malformed or duplicate memories
-    - Improving memory organization after bulk imports  
+    - Improving memory organization after bulk imports
     - Cleaning up memories after schema or configuration changes
     - Reducing memory count when thresholds are reached
 

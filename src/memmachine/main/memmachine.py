@@ -35,6 +35,8 @@ from memmachine.episodic_memory import EpisodicMemory
 from memmachine.semantic_memory.semantic_model import FeatureIdT, SemanticFeature
 from memmachine.semantic_memory.semantic_session_manager import (
     ALL_MEMORY_TYPES as ALL_ISOLATION_TYPES,
+)
+from memmachine.semantic_memory.semantic_session_manager import (
     IsolationType,
 )
 
@@ -419,7 +421,9 @@ class MemMachine:
     ) -> ListResults:
         search_filter_expr = parse_filter(search_filter) if search_filter else None
         isolation = (
-            semantic_isolation if semantic_isolation is not None else ALL_ISOLATION_TYPES
+            semantic_isolation
+            if semantic_isolation is not None
+            else ALL_ISOLATION_TYPES
         )
 
         episodic_task: Task | None = None
@@ -554,16 +558,19 @@ class MemMachine:
         Returns:
             bool: True if lock was successfully acquired and consolidation started,
                   False if the lock is held by another owner or the set cannot be consolidated
+
         """
         from memmachine.semantic_memory.semantic_ingestion import IngestionService
 
         semantic_service = await self._resources.get_semantic_service()
         semantic_manager = await self._resources.get_semantic_manager()
-        
+
         # Get storage through the semantic manager
-        semantic_storage = await semantic_manager._get_semantic_storage()
+        semantic_storage = await semantic_manager._get_semantic_storage()  # noqa: SLF001
         episode_storage = await self._resources.get_episode_storage()
-        resource_retriever = await semantic_manager.get_semantic_session_resource_manager()
+        resource_retriever = (
+            await semantic_manager.get_semantic_session_resource_manager()
+        )
 
         logger.info(
             "Triggering consolidation for set_id: %s (force: %s)",
@@ -580,16 +587,17 @@ class MemMachine:
                     set_id,
                 )
                 return False
-        except Exception as e:
-            logger.error(
-                "Failed to get resources for set_id %s: %s",
+        except Exception:
+            logger.exception(
+                "Failed to get resources for set_id %s",
                 set_id,
-                e,
             )
             return False
 
         # Use the forced threshold if force=True, otherwise use configured threshold
-        consolidation_threshold = 0 if force else semantic_service._consolidation_threshold
+        consolidation_threshold = (
+            0 if force else semantic_service._consolidation_threshold  # noqa: SLF001
+        )
 
         ingestion_service = IngestionService(
             params=IngestionService.Params(
@@ -603,4 +611,3 @@ class MemMachine:
             set_id=set_id,
             resources=resources,
         )
-

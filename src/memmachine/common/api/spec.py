@@ -779,7 +779,11 @@ class WriteSemanticMemorySpec(_WithOrgAndProj):
 
     category: Annotated[
         str,
-        Field(..., description=SpecDoc.SEMANTIC_CATEGORY, examples=Examples.WRITE_SEMANTIC_CATEGORY),
+        Field(
+            ...,
+            description=SpecDoc.SEMANTIC_CATEGORY,
+            examples=Examples.WRITE_SEMANTIC_CATEGORY,
+        ),
     ]
     instruction: Annotated[
         str,
@@ -841,7 +845,9 @@ class WriteSemanticMemoryResponse(BaseModel):
 
     semantic_id: Annotated[
         SafeId,
-        Field(..., description=SpecDoc.SEMANTIC_METADATA_ID, examples=Examples.SEMANTIC_ID),
+        Field(
+            ..., description=SpecDoc.SEMANTIC_METADATA_ID, examples=Examples.SEMANTIC_ID
+        ),
     ]
     created: Annotated[
         bool,

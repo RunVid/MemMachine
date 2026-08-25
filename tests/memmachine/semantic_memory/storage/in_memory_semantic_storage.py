@@ -72,7 +72,9 @@ class InMemorySemanticStorage(SemanticStorage):
         self._history_created_at: dict[tuple[str, EpisodeIdT], datetime] = {}
         self._history_to_sets: dict[EpisodeIdT, dict[str, bool]] = {}
         # Ingestion lock tracking
-        self._ingestion_locks: dict[SetIdT, tuple[str, datetime]] = {}  # set_id -> (owner_id, expires_at)
+        self._ingestion_locks: dict[
+            SetIdT, tuple[str, datetime]
+        ] = {}  # set_id -> (owner_id, expires_at)
         self._next_feature_id = 1
         self._next_history_id = 1
         self._lock = asyncio.Lock()
@@ -833,4 +835,3 @@ class InMemorySemanticStorage(SemanticStorage):
             ]
             for set_id in expired_sets:
                 del self._ingestion_locks[set_id]
-

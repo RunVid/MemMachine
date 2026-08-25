@@ -906,9 +906,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         now = datetime.now(UTC)
 
         async with self._create_session() as session:
-            delete_stmt = delete(IngestionLock).where(
-                IngestionLock.expires_at <= now
-            )
+            delete_stmt = delete(IngestionLock).where(IngestionLock.expires_at <= now)
             result = await session.execute(delete_stmt)
             await session.commit()
 

@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from fastapi import Request
 
 from memmachine import MemMachine
-
-logger = logging.getLogger(__name__)
 from memmachine.common.api import MemoryType as MemoryTypeE
 from memmachine.common.api.spec import (
     AddMemoriesSpec,
@@ -29,6 +27,8 @@ from memmachine.common.api.spec import (
 )
 from memmachine.common.episode_store.episode_model import EpisodeEntry
 from memmachine.semantic_memory.semantic_session_manager import IsolationType
+
+logger = logging.getLogger(__name__)
 
 
 # Placeholder dependency injection function
@@ -400,13 +400,17 @@ async def _write_semantic_memory(
     )
     isolation = _SEMANTIC_ISOLATION_MAP[spec.isolation]
 
-    tag, feature_name, value, semantic_id, created = (
-        await memmachine.write_semantic_from_instruction(
-            session_data=session_data,
-            isolation=isolation,
-            category_name=spec.category,
-            instruction=spec.instruction,
-        )
+    (
+        tag,
+        feature_name,
+        value,
+        semantic_id,
+        created,
+    ) = await memmachine.write_semantic_from_instruction(
+        session_data=session_data,
+        isolation=isolation,
+        category_name=spec.category,
+        instruction=spec.instruction,
     )
     return WriteSemanticMemoryResponse(
         semantic_id=semantic_id,
@@ -415,4 +419,3 @@ async def _write_semantic_memory(
         feature_name=feature_name,
         value=value,
     )
-

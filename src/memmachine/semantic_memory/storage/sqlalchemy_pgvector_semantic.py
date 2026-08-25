@@ -1,6 +1,7 @@
 """SQLAlchemy-backed semantic storage implementation using pgvector."""
 
 import logging
+from datetime import UTC
 from pathlib import Path
 from typing import Any, overload
 
@@ -27,7 +28,8 @@ from sqlalchemy import (
     text,
     update,
 )
-from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import (
@@ -63,7 +65,7 @@ from memmachine.semantic_memory.storage.storage_base import (
 logger = logging.getLogger(__name__)
 
 
-def _result_rowcount(result: Any) -> int:
+def _result_rowcount(result: object) -> int:
     rowcount = getattr(result, "rowcount", 0)
     if rowcount is None:
         return 0
@@ -423,7 +425,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         # Skip if no citations to add
         if not history_ids:
             return
-        
+
         try:
             feature_id_int = int(feature_id)
         except (TypeError, ValueError) as e:
@@ -791,13 +793,13 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
     ) -> bool:
         """
         Try to acquire an ingestion lock for the given set_id.
-        
+
         Uses INSERT ... ON CONFLICT DO NOTHING to atomically try to acquire the lock.
         This prevents race conditions where multiple pods try to process the same set_id.
         """
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=timeout_seconds)
 
         async with self._create_session() as session:
@@ -818,17 +820,17 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
                 acquired_at=now,
                 expires_at=expires_at,
             )
-            
+
             # Use ON CONFLICT DO NOTHING - if lock exists, it will silently fail
             insert_stmt = insert_stmt.on_conflict_do_nothing(index_elements=["set_id"])
-            
+
             result = await session.execute(insert_stmt)
             await session.commit()
-            
+
             # If rowcount is 1, we successfully acquired the lock
             # If rowcount is 0, another pod already holds the lock
             acquired = _result_rowcount(result) == 1
-            
+
             if acquired:
                 logger.info(
                     "Acquired ingestion lock for set_id=%s, owner=%s",
@@ -840,7 +842,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
                     "Failed to acquire ingestion lock for set_id=%s (another pod holds it)",
                     set_id,
                 )
-            
+
             return acquired
 
     async def renew_ingestion_lock(
@@ -849,9 +851,9 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         owner_id: str,
         timeout_seconds: int = 120,
     ) -> bool:
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=timeout_seconds)
 
         async with self._create_session() as session:
@@ -876,7 +878,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
     ) -> None:
         """
         Release an ingestion lock held by this owner.
-        
+
         Only deletes the lock if the owner_id matches to prevent
         accidentally releasing another pod's lock.
         """
@@ -889,7 +891,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             )
             result = await session.execute(delete_stmt)
             await session.commit()
-            
+
             if _result_rowcount(result) > 0:
                 logger.info(
                     "Released ingestion lock for set_id=%s, owner=%s",
@@ -899,9 +901,9 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
 
     async def cleanup_expired_ingestion_locks(self) -> None:
         """Remove ingestion locks that have expired based on their timeout."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         async with self._create_session() as session:
             delete_stmt = delete(IngestionLock).where(
@@ -909,7 +911,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             )
             result = await session.execute(delete_stmt)
             await session.commit()
-            
+
             cleaned = _result_rowcount(result)
             if cleaned > 0:
                 logger.info(

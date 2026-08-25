@@ -13,7 +13,6 @@ Run:
 from __future__ import annotations
 
 import os
-from pprint import pprint
 
 import openai
 import pytest
@@ -79,7 +78,6 @@ def live_llm():
         or "https://api.openai.com/v1"
     )
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
-    print(f"\n=== live_llm model={model!r} base_url={base_url!r} ===")
     client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url)
     return OpenAIResponsesLanguageModel(
         OpenAIResponsesLanguageModelParams(client=client, model=model),
@@ -108,9 +106,6 @@ async def test_manual_write_accepts_additional_notification_criterion(live_llm):
         model=live_llm,
         system_prompt=system_prompt,
     )
-
-    print("\n=== manual_write LLM return ===")
-    pprint(parsed.model_dump())
 
     assert parsed.accepted is True, parsed.rejection_reason
     assert parsed.tag.strip().lower() == "boundaries"
@@ -142,9 +137,6 @@ async def test_manual_write_accepts_mike_then_peter(live_llm):
         model=live_llm,
         system_prompt=system_prompt,
     )
-
-    print("\n=== manual_write Mike→Peter LLM return ===")
-    pprint(parsed.model_dump())
 
     assert parsed.accepted is True, parsed.rejection_reason
     assert parsed.tag.strip().lower() == "boundaries"
@@ -183,9 +175,6 @@ async def test_manual_write_accepts_peter_then_mike(live_llm):
         system_prompt=system_prompt,
     )
 
-    print("\n=== manual_write Peter→Mike LLM return ===")
-    pprint(parsed.model_dump())
-
     assert parsed.accepted is True, parsed.rejection_reason
     assert parsed.tag.strip().lower() == "boundaries"
     assert "mike" in parsed.value.casefold(), parsed.value
@@ -220,9 +209,6 @@ async def test_manual_write_accepts_peter_then_pine_tasks(live_llm):
         system_prompt=system_prompt,
     )
 
-    print("\n=== manual_write Peter→Pine LLM return ===")
-    pprint(parsed.model_dump())
-
     assert parsed.accepted is True, parsed.rejection_reason
     assert parsed.tag.strip().lower() == "boundaries"
     assert "pine" in parsed.value.casefold() or "task" in parsed.value.casefold(), (
@@ -254,9 +240,6 @@ async def test_ingest_merges_notification_scope_instead_of_replace(live_llm):
         update_prompt=update_prompt,
     )
 
-    print("\n=== ingest merge LLM return ===")
-    pprint([c.model_dump() for c in commands])
-
     deletes = [c for c in commands if c.command == SemanticCommandType.DELETE]
     adds = [c for c in commands if c.command == SemanticCommandType.ADD]
     assert adds, f"expected at least one add, got {commands!r}"
@@ -287,9 +270,6 @@ async def test_ingest_merges_mike_then_peter(live_llm):
         model=live_llm,
         update_prompt=update_prompt,
     )
-
-    print("\n=== ingest Mike→Peter LLM return ===")
-    pprint([c.model_dump() for c in commands])
 
     deletes = [c for c in commands if c.command == SemanticCommandType.DELETE]
     adds = [c for c in commands if c.command == SemanticCommandType.ADD]
@@ -328,9 +308,6 @@ async def test_ingest_exclusive_only_replaces_notification_scope(live_llm):
         model=live_llm,
         update_prompt=update_prompt,
     )
-
-    print("\n=== ingest exclusive-only LLM return ===")
-    pprint([c.model_dump() for c in commands])
 
     adds = [c for c in commands if c.command == SemanticCommandType.ADD]
     assert adds, f"expected add, got {commands!r}"

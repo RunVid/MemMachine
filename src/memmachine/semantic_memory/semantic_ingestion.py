@@ -15,15 +15,15 @@ from pydantic import BaseModel, InstanceOf, TypeAdapter
 from memmachine.common.embedder import Embedder
 from memmachine.common.episode_store import Episode, EpisodeIdT, EpisodeStorage
 from memmachine.common.filter.filter_parser import And, Comparison
-from memmachine.semantic_memory.semantic_llm import (
-    LLMReducedFeature,
-    llm_consolidate_features,
-    llm_feature_update,
-)
 from memmachine.semantic_memory.category_tags import (
     get_allowed_tags_for_category,
     get_category_tag_policy,
     normalize_category_tag,
+)
+from memmachine.semantic_memory.semantic_llm import (
+    LLMReducedFeature,
+    llm_consolidate_features,
+    llm_feature_update,
 )
 from memmachine.semantic_memory.semantic_model import (
     ResourceRetriever,
@@ -198,7 +198,7 @@ class IngestionService:
             finally:
                 await self.release_set_lock(set_id)
 
-        asyncio.create_task(_run())
+        _ = asyncio.create_task(_run())
         return True
 
     async def _process_single_set(self, set_id: str) -> None:
@@ -210,14 +210,14 @@ class IngestionService:
                 await self._process_single_set_with_lock(set_id)
         finally:
             await self.release_set_lock(set_id)
-    
-    async def _process_single_set_with_lock(self, set_id: str) -> None:  # noqa: C901
+
+    async def _process_single_set_with_lock(self, set_id: str) -> None:
         """
         Process all uningested messages for a set_id (called after lock is acquired).
-        
+
         This processes messages in batches of 25 until all are processed,
         then performs consolidation once at the end.
-        
+
         Note: This is only called for sets that have semantic categories configured.
         """
         logger.info("Processing semantic ingestion for set_id: %s", set_id)
@@ -243,7 +243,7 @@ class IngestionService:
                 limit=INGESTION_BATCH_SIZE,
                 is_ingested=False,
             )
-            
+
             if len(history_ids) == 0:
                 logger.info(
                     "Finished processing %d total messages for set_id %s",
@@ -251,14 +251,14 @@ class IngestionService:
                     set_id,
                 )
                 break
-            
+
             logger.info(
                 "Processing batch of %d messages for set_id %s (total so far: %d)",
                 len(history_ids),
                 set_id,
                 total_processed,
             )
-            
+
             # Process this batch
             await self._process_message_batch(
                 set_id=set_id,
@@ -266,9 +266,9 @@ class IngestionService:
                 resources=resources,
                 llm_timeout_seconds=llm_timeout_seconds,
             )
-            
+
             total_processed += len(history_ids)
-        
+
         # After processing all messages, consolidate once
         if total_processed > 0:
             logger.debug("Starting consolidation for set_id %s", set_id)
@@ -277,7 +277,7 @@ class IngestionService:
                 resources=resources,
                 llm_timeout_seconds=llm_timeout_seconds,
             )
-    
+
     async def _process_message_batch(
         self,
         set_id: str,
@@ -673,11 +673,11 @@ class IngestionService:
             # Get all memory IDs that exist
             existing_ids = {m.metadata.id for m in memories if m.metadata.id is not None}
             kept_ids = set(consolidate_resp.keep_memories)
-            
+
             # Calculate how many memories will be deleted
             num_to_delete = len(existing_ids) - len(kept_ids)
             num_consolidated = len(consolidate_resp.consolidated_memories)
-            
+
             # RULE: If creating N consolidated memories, must delete AT LEAST N source memories
             if num_to_delete < num_consolidated:
                 logger.error(
@@ -740,7 +740,7 @@ class IngestionService:
         if original_tag and consolidate_resp.consolidated_memories:
             expected_tag = original_tag
             corrected_count = 0
-            
+
             for f in consolidate_resp.consolidated_memories:
                 if f.tag != expected_tag:
                     corrected_count += 1
@@ -751,7 +751,7 @@ class IngestionService:
                         f.feature,
                     )
                     f.tag = expected_tag
-            
+
             if corrected_count > 0:
                 logger.warning(
                     "Fixed %d consolidated tag(s) to maintain input tag '%s' - set_id=%s, category=%s",

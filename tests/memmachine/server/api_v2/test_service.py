@@ -1,12 +1,10 @@
-import pytest
-
+from memmachine.common.api.spec import ListMemoriesSpec, MemoryMessage
 from memmachine.semantic_memory.semantic_session_manager import IsolationType
 from memmachine.server.api_v2.service import (
-    _infer_semantic_isolation,
     _extract_raw_ids_from_messages,
+    _infer_semantic_isolation,
     _resolve_list_semantic_scope,
 )
-from memmachine.common.api.spec import ListMemoriesSpec, MemoryMessage
 
 
 def test_infer_semantic_isolation_role_only():

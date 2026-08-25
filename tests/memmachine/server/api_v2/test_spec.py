@@ -13,8 +13,6 @@ from memmachine.common.api.spec import (
     DeleteEpisodicMemorySpec,
     DeleteProjectSpec,
     DeleteSemanticMemorySpec,
-    WriteSemanticMemorySpec,
-    WriteSemanticMemoryResponse,
     InvalidNameError,
     ListMemoriesSpec,
     MemoryMessage,
@@ -22,6 +20,8 @@ from memmachine.common.api.spec import (
     ProjectResponse,
     SearchMemoriesSpec,
     SearchResult,
+    WriteSemanticMemoryResponse,
+    WriteSemanticMemorySpec,
     _is_valid_name,
 )
 from memmachine.common.episode_store.episode_model import EpisodeType

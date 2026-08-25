@@ -775,19 +775,19 @@ class InMemorySemanticStorage(SemanticStorage):
 
         async with self._lock:
             now = _utcnow()
-            
+
             # Clean up expired lock for this set_id
             if set_id in self._ingestion_locks:
                 _, expires_at = self._ingestion_locks[set_id]
                 if expires_at <= now:
                     del self._ingestion_locks[set_id]
-            
+
             # Try to acquire lock
             if set_id not in self._ingestion_locks:
                 expires_at = now + timedelta(seconds=timeout_seconds)
                 self._ingestion_locks[set_id] = (owner_id, expires_at)
                 return True
-            
+
             return False
 
     async def renew_ingestion_lock(

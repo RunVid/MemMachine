@@ -66,7 +66,7 @@ class _SessionData:
 
     @property
     def session_id(self) -> str | None:
-        return self.session_id_override if self.session_id_override else self.session_key
+        return self.session_id_override or self.session_key
 
 
 def _normalize_metadata_id(value: object | None) -> str | None:
@@ -330,6 +330,7 @@ async def _consolidate_memories(
 
     Returns:
         ConsolidateMemoriesResponse with lock acquisition status
+
     """
     logger.info(
         "Consolidating memories - set_id: %s, force: %s",

@@ -7,6 +7,11 @@ does not track or contribute back to that project.
 
 The design is narrower and more operational:
 
+- **One project per user.** Isolation is at the project; that project holds
+  that user's memories.
+- **A project can have profile memory and role memory.** Profile is who the
+  user is (facts, life context). Role is how the agent should behave for
+  them (personality, tone, boundaries).
 - **Episodic memory stores claims**, not full chat transcripts.
 - **Semantic memory is organized by our category and tag schema.**
 - **Ingestion and consolidation are safe to run across multiple pods.**
@@ -22,6 +27,23 @@ self-contained statements about a user, an agent, or a setting.
 A claim is the input to extraction. Semantic prompts expect a stated fact or
 preference, not a multi-turn conversation. Chat history, if you have it, should
 be reduced to claims before it is written here.
+
+### One project per user
+
+v2 APIs are scoped by `org_id` and `project_id`. In this deployment, **each
+user is one project** (`project_id` is the user). Writes that omit `user_id`
+default to that project.
+
+Semantic memory on a project is split by isolation:
+
+- **Profile memory** (`prompt.profile`) — user facts and long-lived context
+  (task-assistant tags plus life-context tags).
+- **Role memory** (`prompt.role`) — per-role agent settings
+  (`agent_personality`: tone, persona, style, boundaries). A project can have
+  more than one role.
+
+Claims about the user go to profile memory. Claims about how the agent should
+act go to role memory when `role_id` is present.
 
 ### Category and tag schema
 
@@ -111,7 +133,8 @@ Default API base: `http://localhost:8080/api/v2`.
 from memmachine import MemMachineClient
 
 client = MemMachineClient(base_url="http://localhost:8080")
-project = client.create_project(org_id="my-org", project_id="my-project")
+# One project per user: project_id is the user.
+project = client.create_project(org_id="my-org", project_id="user123")
 
 memory = project.memory(user_id="user123", agent_id="agent456")
 
@@ -125,8 +148,7 @@ memory.add(
 results = memory.search(query="notification scope", limit=10)
 ```
 
-v2 APIs are scoped by `org_id` and `project_id`. See `AGENTS.md` for endpoint
-lists and more examples.
+See `AGENTS.md` for endpoint lists and more examples.
 
 ## Configuration
 

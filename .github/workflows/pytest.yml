@@ -2,6 +2,7 @@ name: Run Python unit tests
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:

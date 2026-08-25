@@ -56,10 +56,10 @@ services:
     profiles:
       - "memmachine-dev"
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     volumes:
-      - ./config/configuration_dev.yml
+      - ./config/configuration_dev.yml:/app/configuration.yml:ro
     environment:
       MEMORY_CONFIG: /app/configuration.yml
     env_file:

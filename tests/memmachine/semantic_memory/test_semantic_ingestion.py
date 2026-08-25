@@ -512,3 +512,141 @@ def test_normalize_command_tags_agent_personality():
 
     assert commands[0].tag == "tone"
     assert commands[1].tag == "style"
+
+
+@pytest.mark.asyncio
+async def test_start_background_consolidation_skips_when_lock_held(
+    ingestion_service: IngestionService,
+    semantic_storage: SemanticStorage,
+    resources: Resources,
+):
+    acquired = await semantic_storage.try_acquire_ingestion_lock(
+        set_id="user-123",
+        owner_id="other-pod",
+        timeout_seconds=120,
+    )
+    assert acquired is True
+
+    started = await ingestion_service.start_background_consolidation(
+        set_id="user-123",
+        resources=resources,
+    )
+    assert started is False
+
+
+@pytest.mark.asyncio
+async def test_start_background_consolidation_runs_and_releases_lock(
+    ingestion_service: IngestionService,
+    semantic_storage: SemanticStorage,
+    resources: Resources,
+    monkeypatch,
+):
+    finished = asyncio.Event()
+
+    async def fake_consolidate(**kwargs) -> None:
+        _ = kwargs
+        finished.set()
+
+    monkeypatch.setattr(
+        ingestion_service,
+        "_consolidate_set_memories_if_applicable",
+        fake_consolidate,
+    )
+
+    started = await ingestion_service.start_background_consolidation(
+        set_id="user-123",
+        resources=resources,
+    )
+    assert started is True
+    await asyncio.wait_for(finished.wait(), timeout=2)
+    await asyncio.sleep(0.05)
+
+    acquired = await semantic_storage.try_acquire_ingestion_lock(
+        set_id="user-123",
+        owner_id="other-pod",
+        timeout_seconds=120,
+    )
+    assert acquired is True
+
+
+@pytest.mark.asyncio
+async def test_start_background_consolidation_skips_while_in_progress(
+    ingestion_service: IngestionService,
+    resources: Resources,
+    monkeypatch,
+):
+    hold = asyncio.Event()
+    running = asyncio.Event()
+
+    async def fake_consolidate(**kwargs) -> None:
+        _ = kwargs
+        running.set()
+        await hold.wait()
+
+    monkeypatch.setattr(
+        ingestion_service,
+        "_consolidate_set_memories_if_applicable",
+        fake_consolidate,
+    )
+
+    assert (
+        await ingestion_service.start_background_consolidation(
+            set_id="user-123",
+            resources=resources,
+        )
+        is True
+    )
+    await asyncio.wait_for(running.wait(), timeout=2)
+    assert (
+        await ingestion_service.start_background_consolidation(
+            set_id="user-123",
+            resources=resources,
+        )
+        is False
+    )
+    hold.set()
+    await asyncio.sleep(0.05)
+
+
+@pytest.mark.asyncio
+async def test_background_consolidation_renews_lock(
+    ingestion_service: IngestionService,
+    semantic_storage: SemanticStorage,
+    resources: Resources,
+    monkeypatch,
+):
+    renew_calls = 0
+    original_renew = semantic_storage.renew_ingestion_lock
+
+    async def tracking_renew(*args, **kwargs) -> bool:
+        nonlocal renew_calls
+        renew_calls += 1
+        return await original_renew(*args, **kwargs)
+
+    monkeypatch.setattr(
+        semantic_storage,
+        "renew_ingestion_lock",
+        tracking_renew,
+    )
+    monkeypatch.setattr(
+        "memmachine.semantic_memory.semantic_ingestion.INGESTION_LOCK_RENEW_INTERVAL_SECONDS",
+        0.05,
+    )
+
+    async def fake_consolidate(**kwargs) -> None:
+        _ = kwargs
+        await asyncio.sleep(0.18)
+
+    monkeypatch.setattr(
+        ingestion_service,
+        "_consolidate_set_memories_if_applicable",
+        fake_consolidate,
+    )
+
+    started = await ingestion_service.start_background_consolidation(
+        set_id="user-123",
+        resources=resources,
+    )
+    assert started is True
+    await asyncio.sleep(0.25)
+    assert renew_calls >= 2

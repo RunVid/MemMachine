@@ -1028,3 +1028,48 @@ async def test_get_set_ids_with_older_than_and_min_uningested(
     )
 
     assert set_ids == ["busy_user"]
+
+
+@pytest.mark.asyncio
+async def test_ingestion_lock_is_exclusive_and_renewable(
+    semantic_storage: SemanticStorage,
+):
+    acquired = await semantic_storage.try_acquire_ingestion_lock(
+        set_id="user",
+        owner_id="pod-a",
+        timeout_seconds=120,
+    )
+    assert acquired is True
+    assert (
+        await semantic_storage.try_acquire_ingestion_lock(
+            set_id="user",
+            owner_id="pod-b",
+            timeout_seconds=120,
+        )
+        is False
+    )
+    assert (
+        await semantic_storage.renew_ingestion_lock(
+            set_id="user",
+            owner_id="pod-a",
+            timeout_seconds=120,
+        )
+        is True
+    )
+    assert (
+        await semantic_storage.renew_ingestion_lock(
+            set_id="user",
+            owner_id="pod-b",
+            timeout_seconds=120,
+        )
+        is False
+    )
+    await semantic_storage.release_ingestion_lock(set_id="user", owner_id="pod-a")
+    assert (
+        await semantic_storage.try_acquire_ingestion_lock(
+            set_id="user",
+            owner_id="pod-b",
+            timeout_seconds=120,
+        )
+        is True
+    )

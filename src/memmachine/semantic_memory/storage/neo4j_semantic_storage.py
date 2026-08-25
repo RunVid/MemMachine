@@ -499,13 +499,7 @@ class Neo4jSemanticStorage(SemanticStorage):
         limit: int | None = None,
         is_ingested: bool | None = None,
     ) -> list[EpisodeIdT]:
-        """
-        Get history messages, atomically claiming them to prevent duplicate processing.
-        
-        In Neo4j, we immediately mark messages as ingested in the same query to prevent
-        other pods from processing them. Neo4j doesn't have SELECT FOR UPDATE SKIP LOCKED,
-        but we achieve similar behavior by marking messages as ingested atomically.
-        """
+        """Retrieve history ids. Does not change ingested status."""
         query = ["MATCH (h:SetHistory)"]
         conditions = []
         params: dict[str, Any] = {}
@@ -517,15 +511,11 @@ class Neo4jSemanticStorage(SemanticStorage):
             params["is_ingested"] = is_ingested
         if conditions:
             query.append("WHERE " + " AND ".join(conditions))
-        
-        # Immediately mark as ingested to prevent other pods from claiming them
-        # This achieves atomic claiming similar to SELECT FOR UPDATE SKIP LOCKED
-        query.append("SET h.is_ingested = true")
         query.append("RETURN h.history_id AS history_id ORDER BY h.history_id")
         if limit is not None:
             query.append("LIMIT $limit")
             params["limit"] = limit
-        
+
         records, _, _ = await self._driver.execute_query("\n".join(query), **params)
         return [EpisodeIdT(record["history_id"]) for record in records]
 
@@ -1270,7 +1260,7 @@ class Neo4jSemanticStorage(SemanticStorage):
         self,
         set_id: SetIdT,
         owner_id: str,
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 120,
     ) -> bool:
         """
         Try to acquire an ingestion lock for the given set_id.
@@ -1340,6 +1330,31 @@ class Neo4jSemanticStorage(SemanticStorage):
             )
 
         return acquired
+
+    async def renew_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+        timeout_seconds: int = 120,
+    ) -> bool:
+        from datetime import datetime, timedelta, timezone
+
+        expires_at_ts = (
+            datetime.now(timezone.utc) + timedelta(seconds=timeout_seconds)
+        ).timestamp()
+        records, _, _ = await self._driver.execute_query(
+            """
+            MATCH (l:IngestionLock {set_id: $set_id, owner_id: $owner_id})
+            SET l.expires_at = $expires_at_ts
+            RETURN count(l) AS renewed_count
+            """,
+            set_id=set_id,
+            owner_id=owner_id,
+            expires_at_ts=expires_at_ts,
+        )
+        if not records:
+            return False
+        return int(dict(records[0]).get("renewed_count", 0) or 0) > 0
 
     async def release_ingestion_lock(
         self,

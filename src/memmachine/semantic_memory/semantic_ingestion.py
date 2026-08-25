@@ -3,6 +3,10 @@
 import asyncio
 import itertools
 import logging
+import os
+import socket
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from itertools import chain
 
 import numpy as np
@@ -34,31 +38,12 @@ from memmachine.semantic_memory.storage.storage_base import SemanticStorage
 
 logger = logging.getLogger(__name__)
 
-INGESTION_LOCK_TIMEOUT_SECONDS = 1800
+INGESTION_LOCK_TIMEOUT_SECONDS = 120
+INGESTION_LOCK_RENEW_INTERVAL_SECONDS = 20
 INGESTION_BATCH_SIZE = 25
-INGESTION_LLM_BUDGET_SECONDS = 1200  # num_batches * llm_timeout must not exceed 20 min
-INGESTION_LLM_TIMEOUT_SECONDS = 300  # 5 min per LLM call when batch count is low
+INGESTION_LLM_TIMEOUT_SECONDS = 300
+INGESTION_LLM_MAX_ATTEMPTS = 3
 INGESTION_MAX_CONCURRENT_SETS = 5
-
-
-def _compute_llm_timeout_seconds(num_batches: int) -> int:
-    """Per-call LLM timeout: 5 min by default, reduced when batch count grows."""
-    num_batches = max(1, num_batches)
-    return min(
-        INGESTION_LLM_TIMEOUT_SECONDS,
-        INGESTION_LLM_BUDGET_SECONDS // num_batches,
-    )
-
-
-def _get_isolation_type(set_id: str) -> str:
-    """Determine the isolation type from set_id prefix."""
-    if set_id.startswith("mem_session_"):
-        return "session"
-    elif set_id.startswith("mem_user_"):
-        return "user"
-    elif set_id.startswith("mem_role_"):
-        return "role"
-    return "unknown"
 
 
 class IngestionService:
@@ -88,13 +73,7 @@ class IngestionService:
         self._set_concurrency_semaphore = asyncio.Semaphore(
             max(1, INGESTION_MAX_CONCURRENT_SETS),
         )
-        
-        # Generate unique owner ID for this pod/process
-        import os
-        import socket
-        hostname = socket.gethostname()
-        pid = os.getpid()
-        self._owner_id = f"{hostname}-{pid}"
+        self._owner_id = f"{socket.gethostname()}-{os.getpid()}"
 
     async def process_set_ids(self, set_ids: list[SetIdT]) -> None:
         """Process ingestion for multiple set_ids with bounded concurrency."""
@@ -121,53 +100,116 @@ class IngestionService:
         if len(errors) > 0:
             raise ExceptionGroup("Failed to process set ids", errors)
 
-    async def _process_single_set(self, set_id: str) -> None:  # noqa: C901
-        """
-        Process all uningested messages for a single set_id.
-        
-        This method acquires a lock for the entire ingestion cycle to prevent
-        race conditions when multiple pods try to process the same set_id.
-        """
-        # Try to acquire ingestion lock for this set_id
+    async def try_acquire_set_lock(self, set_id: str) -> bool:
         logger.info(
             "Attempting to acquire ingestion lock for set_id=%s, owner=%s",
             set_id,
             self._owner_id,
         )
-        
         lock_acquired = await self._semantic_storage.try_acquire_ingestion_lock(
             set_id=set_id,
             owner_id=self._owner_id,
             timeout_seconds=INGESTION_LOCK_TIMEOUT_SECONDS,
         )
-        
         if not lock_acquired:
             logger.info(
-                "SKIPPED set_id=%s - lock held by another pod, owner=%s will not process",
+                "SKIPPED set_id=%s - lock held by another owner, owner=%s",
                 set_id,
                 self._owner_id,
             )
-            return
-        
+            return False
         logger.info(
-            "ACQUIRED lock for set_id=%s, owner=%s - starting ingestion",
+            "ACQUIRED lock for set_id=%s, owner=%s",
             set_id,
             self._owner_id,
         )
-        
+        return True
+
+    async def release_set_lock(self, set_id: str) -> None:
+        await self._semantic_storage.release_ingestion_lock(
+            set_id=set_id,
+            owner_id=self._owner_id,
+        )
+        logger.info(
+            "RELEASED lock for set_id=%s, owner=%s",
+            set_id,
+            self._owner_id,
+        )
+
+    @asynccontextmanager
+    async def _renew_set_lock(self, set_id: str) -> AsyncIterator[None]:
+        stop = asyncio.Event()
+
+        async def _heartbeat() -> None:
+            while not stop.is_set():
+                try:
+                    await asyncio.wait_for(
+                        stop.wait(),
+                        timeout=INGESTION_LOCK_RENEW_INTERVAL_SECONDS,
+                    )
+                    return
+                except TimeoutError:
+                    renewed = await self._semantic_storage.renew_ingestion_lock(
+                        set_id=set_id,
+                        owner_id=self._owner_id,
+                        timeout_seconds=INGESTION_LOCK_TIMEOUT_SECONDS,
+                    )
+                    if not renewed:
+                        logger.warning(
+                            "Failed to renew ingestion lock for set_id=%s, owner=%s",
+                            set_id,
+                            self._owner_id,
+                        )
+                        return
+
+        heartbeat_task = asyncio.create_task(_heartbeat())
         try:
-            await self._process_single_set_with_lock(set_id)
+            yield None
         finally:
-            # Always release the lock, even if processing fails
-            await self._semantic_storage.release_ingestion_lock(
-                set_id=set_id,
-                owner_id=self._owner_id,
-            )
-            logger.info(
-                "RELEASED lock for set_id=%s, owner=%s - ingestion complete",
-                set_id,
-                self._owner_id,
-            )
+            stop.set()
+            heartbeat_task.cancel()
+            _ = await asyncio.gather(heartbeat_task, return_exceptions=True)
+
+    async def start_background_consolidation(
+        self,
+        *,
+        set_id: str,
+        resources: InstanceOf[Resources],
+    ) -> bool:
+        """
+        Acquire the set lock on this pod and run consolidation in the background.
+
+        Returns False if another owner already holds the lock.
+        """
+        if not await self.try_acquire_set_lock(set_id):
+            return False
+
+        async def _run() -> None:
+            try:
+                async with self._renew_set_lock(set_id):
+                    await self._consolidate_set_memories_if_applicable(
+                        set_id=set_id,
+                        resources=resources,
+                        llm_timeout_seconds=INGESTION_LLM_TIMEOUT_SECONDS,
+                    )
+                    logger.info("Successfully consolidated set_id: %s", set_id)
+            except Exception:
+                logger.exception("Failed to consolidate set_id %s", set_id)
+            finally:
+                await self.release_set_lock(set_id)
+
+        asyncio.create_task(_run())
+        return True
+
+    async def _process_single_set(self, set_id: str) -> None:
+        if not await self.try_acquire_set_lock(set_id):
+            return
+
+        try:
+            async with self._renew_set_lock(set_id):
+                await self._process_single_set_with_lock(set_id)
+        finally:
+            await self.release_set_lock(set_id)
     
     async def _process_single_set_with_lock(self, set_id: str) -> None:  # noqa: C901
         """
@@ -185,23 +227,17 @@ class IngestionService:
             set_ids=[set_id],
             is_ingested=False,
         )
-        num_batches = max(
-            1,
-            (pending_count + INGESTION_BATCH_SIZE - 1) // INGESTION_BATCH_SIZE,
-        )
-        llm_timeout_seconds = _compute_llm_timeout_seconds(num_batches)
+        llm_timeout_seconds = INGESTION_LLM_TIMEOUT_SECONDS
         logger.info(
-            "set_id=%s pending=%d batches=%d llm_timeout=%ds",
+            "set_id=%s pending=%d llm_timeout=%ds",
             set_id,
             pending_count,
-            num_batches,
             llm_timeout_seconds,
         )
 
         # Process all uningested messages in batches
         total_processed = 0
         while True:
-            # Atomically claim next batch of messages
             history_ids = await self._semantic_storage.get_history_messages(
                 set_ids=[set_id],
                 limit=INGESTION_BATCH_SIZE,
@@ -304,45 +340,29 @@ class IngestionService:
                 f"[{message.producer_role}] {message.content}" for message in messages
             ]
 
-            try:
-                commands = await asyncio.wait_for(
-                    llm_feature_update(
-                        features=features,
-                        message_contents=message_contents,
-                        model=resources.language_model,
-                        update_prompt=semantic_category.prompt.update_prompt,
-                    ),
-                    timeout=llm_timeout_seconds,
-                )
-                logger.debug(
-                    "LLM generated %d commands for batch of %d messages, category %s",
-                    len(commands),
-                    len(messages),
-                    semantic_category.name,
-                )
-                self._normalize_command_tags(
-                    commands,
-                    semantic_category.name,
-                    set_id=set_id,
-                )
-            except TimeoutError:
-                logger.warning(
-                    "LLM feature update timed out after %ds for set_id=%s, category=%s; "
-                    "skipping semantic update (messages already marked ingested)",
-                    llm_timeout_seconds,
-                    set_id,
-                    semantic_category.name,
-                )
+            commands = await self._llm_feature_update_with_retries(
+                features=features,
+                message_contents=message_contents,
+                resources=resources,
+                semantic_category=semantic_category,
+                set_id=set_id,
+                llm_timeout_seconds=llm_timeout_seconds,
+                batch_size=len(messages),
+            )
+            if commands is None:
                 return
-            except Exception:
-                logger.exception(
-                    "Failed to process batch of %d messages for semantic type %s",
-                    len(messages),
-                    semantic_category.name,
-                )
-                if self._debug_fail_loudly:
-                    raise
-                return
+
+            logger.debug(
+                "LLM generated %d commands for batch of %d messages, category %s",
+                len(commands),
+                len(messages),
+                semantic_category.name,
+            )
+            self._normalize_command_tags(
+                commands,
+                semantic_category.name,
+                set_id=set_id,
+            )
 
             citation_ids = [message.uid for message in messages]
             await self._apply_commands(
@@ -366,15 +386,73 @@ class IngestionService:
 
         await asyncio.gather(*semantic_category_runners)
 
+        await self._semantic_storage.mark_messages_ingested(
+            set_id=set_id,
+            history_ids=history_ids,
+        )
+
         logger.info(
             "Finished processing batch of %d messages for set %s",
             len(messages),
             set_id,
         )
 
-        # Note: Messages are already marked as ingested atomically when claimed
-        # via get_history_messages(). No need to mark them again here.
-        # Consolidation will be performed once after all batches are processed.
+    async def _llm_feature_update_with_retries(
+        self,
+        *,
+        features: list[SemanticFeature],
+        message_contents: list[str],
+        resources: InstanceOf[Resources],
+        semantic_category: InstanceOf[SemanticCategory],
+        set_id: str,
+        llm_timeout_seconds: int,
+        batch_size: int,
+    ) -> list[SemanticCommand] | None:
+        last_error: Exception | None = None
+        for attempt in range(1, INGESTION_LLM_MAX_ATTEMPTS + 1):
+            try:
+                return await asyncio.wait_for(
+                    llm_feature_update(
+                        features=features,
+                        message_contents=message_contents,
+                        model=resources.language_model,
+                        update_prompt=semantic_category.prompt.update_prompt,
+                    ),
+                    timeout=llm_timeout_seconds,
+                )
+            except TimeoutError as e:
+                last_error = e
+                logger.warning(
+                    "LLM feature update timed out after %ds "
+                    "(attempt %d/%d) for set_id=%s, category=%s",
+                    llm_timeout_seconds,
+                    attempt,
+                    INGESTION_LLM_MAX_ATTEMPTS,
+                    set_id,
+                    semantic_category.name,
+                )
+            except Exception as e:
+                last_error = e
+                logger.exception(
+                    "Failed to process batch of %d messages for semantic type %s "
+                    "(attempt %d/%d)",
+                    batch_size,
+                    semantic_category.name,
+                    attempt,
+                    INGESTION_LLM_MAX_ATTEMPTS,
+                )
+                if self._debug_fail_loudly:
+                    raise
+
+        logger.warning(
+            "Giving up LLM feature update after %d attempts for set_id=%s, "
+            "category=%s; batch will still be marked ingested. last_error=%s",
+            INGESTION_LLM_MAX_ATTEMPTS,
+            set_id,
+            semantic_category.name,
+            last_error,
+        )
+        return None
 
     def _filter_features_for_category(
         self,

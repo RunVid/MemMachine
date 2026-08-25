@@ -133,7 +133,7 @@ class SemanticStorage(ABC):
         limit: int | None = None,
         is_ingested: bool | None = None,
     ) -> list[EpisodeIdT]:
-        """Retrieve history messages with optional ingestion status."""
+        """Retrieve history ids. Does not change ingested status."""
         raise NotImplementedError
 
     @abstractmethod
@@ -184,26 +184,31 @@ class SemanticStorage(ABC):
         self,
         set_id: SetIdT,
         owner_id: str,
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 120,
     ) -> bool:
         """
-        Try to acquire an ingestion lock for the given set_id.
-        
-        This lock covers the ENTIRE ingestion cycle for a set_id:
-        - Claiming all uningested messages (in batches, size set by ingestion service)
-        - Processing each batch
-        - Consolidation
-        
-        This prevents race conditions when multiple pods try to process
-        the same set_id simultaneously.
-        
-        Args:
-            set_id: The set to lock for ingestion
-            owner_id: Unique identifier for this pod/process (e.g., hostname + PID)
-            timeout_seconds: Lock expires after this many seconds (default 5 minutes)
-            
+        Try to acquire an ingestion lease for the given set_id.
+
+        The holder must renew the lease while work is in progress. Covers
+        extract for the pending snapshot plus consolidation.
+
         Returns:
-            True if lock was acquired, False if another pod holds the lock
+            True if lock was acquired, False if another owner holds it
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def renew_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+        timeout_seconds: int = 120,
+    ) -> bool:
+        """
+        Extend expires_at for a lock held by this owner.
+
+        Returns:
+            True if this owner still holds the lock, False if it was lost
         """
         raise NotImplementedError
 

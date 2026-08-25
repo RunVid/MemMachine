@@ -768,7 +768,7 @@ class InMemorySemanticStorage(SemanticStorage):
         self,
         set_id: SetIdT,
         owner_id: str,
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 120,
     ) -> bool:
         """Try to acquire an ingestion lock for the given set_id."""
         from datetime import timedelta
@@ -789,6 +789,26 @@ class InMemorySemanticStorage(SemanticStorage):
                 return True
             
             return False
+
+    async def renew_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+        timeout_seconds: int = 120,
+    ) -> bool:
+        from datetime import timedelta
+
+        async with self._lock:
+            if set_id not in self._ingestion_locks:
+                return False
+            lock_owner, _ = self._ingestion_locks[set_id]
+            if lock_owner != owner_id:
+                return False
+            self._ingestion_locks[set_id] = (
+                owner_id,
+                _utcnow() + timedelta(seconds=timeout_seconds),
+            )
+            return True
 
     async def release_ingestion_lock(
         self,

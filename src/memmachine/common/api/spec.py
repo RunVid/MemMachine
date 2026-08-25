@@ -491,8 +491,9 @@ class ConsolidateMemoriesResponse(BaseModel):
     lock_acquired: Annotated[
         bool,
         Field(
-            description="True if the lock was acquired and processing attempted. "
-            "False if another process is already consolidating this set.",
+            description="True if this pod acquired the set lock and started "
+            "background consolidation. False if another owner already holds "
+            "the lock, or the set has no semantic categories.",
         ),
     ]
 

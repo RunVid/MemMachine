@@ -16,6 +16,11 @@ from memmachine.semantic_memory.semantic_llm import (
     llm_consolidate_features,
     llm_feature_update,
 )
+from memmachine.semantic_memory.category_tags import (
+    get_allowed_tags_for_category,
+    get_category_tag_policy,
+    normalize_category_tag,
+)
 from memmachine.semantic_memory.semantic_model import (
     ResourceRetriever,
     Resources,
@@ -378,34 +383,9 @@ class IngestionService:
         *,
         set_id: str,
     ) -> list[SemanticFeature]:
-        if category_name == "profile":
-            valid_tags = {
-                "basics",
-                "contacts",
-                "identities",
-                "accounts",
-                "preferences",
-                "relationships",
-                "services",
-                "others",
-            }
-        elif category_name == "profile_life_context":
-            valid_tags = {
-                "interests",
-                "lifestyle",
-                "goals",
-                "personality",
-                "life_situation",
-                "general_preference",
-            }
-        elif category_name == "agent_personality":
-            valid_tags = {
-                "tone",
-                "persona",
-                "style",
-                "boundaries",
-            }
-        else:
+        """Drop stored features whose tag is outside the closed set for this category."""
+        valid_tags = get_allowed_tags_for_category(category_name)
+        if valid_tags is None:
             return features
 
         original_count = len(features)
@@ -431,45 +411,14 @@ class IngestionService:
         *,
         set_id: str,
     ) -> None:
-        if category_name == "profile":
-            valid_tags = {
-                "basics",
-                "contacts",
-                "identities",
-                "accounts",
-                "preferences",
-                "relationships",
-                "services",
-                "others",
-            }
-            default_tag = "others"
-        elif category_name == "profile_life_context":
-            valid_tags = {
-                "interests",
-                "lifestyle",
-                "goals",
-                "personality",
-                "life_situation",
-                "general_preference",
-            }
-            default_tag = "interests"
-        elif category_name == "agent_personality":
-            valid_tags = {
-                "tone",
-                "persona",
-                "style",
-                "boundaries",
-            }
-            default_tag = "style"
-        else:
+        """Rewrite extract-command tags onto the shared category tag policy."""
+        if get_category_tag_policy(category_name) is None:
             return
 
         corrected_count = 0
         for command in commands:
             original_tag = command.tag
-            normalized_tag = command.tag.lower().strip()
-            if normalized_tag not in valid_tags:
-                normalized_tag = default_tag
+            normalized_tag = normalize_category_tag(category_name, command.tag)
 
             if original_tag != normalized_tag:
                 corrected_count += 1

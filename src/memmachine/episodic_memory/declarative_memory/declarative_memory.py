@@ -339,7 +339,9 @@ class DeclarativeMemory:
 
         Returns:
             list[tuple[float, Episode]]:
-                A list of scored episodes relevant to the query, ordered chronologically.
+                A list of scored episodes relevant to the query, ordered
+                chronologically. Exact-duplicate content is skipped so later
+                ranked episodes can fill ``max_num_episodes``.
 
         """
         mangled_property_filter = DeclarativeMemory._mangle_property_filter(
@@ -701,14 +703,38 @@ class DeclarativeMemory:
         await asyncio.gather(*delete_nodes_tasks)
 
     @staticmethod
+    def _episode_content_key(episode: Episode) -> str:
+        """Stable key for exact-content deduplication at search time."""
+        content = episode.content
+        if isinstance(content, str):
+            return content
+        return json.dumps(content, sort_keys=True, default=str)
+
+    @staticmethod
     def _unify_scored_anchored_episode_contexts(
         scored_anchored_episode_contexts: Iterable[
             tuple[float, Episode, Iterable[Episode]]
         ],
         max_num_episodes: int,
     ) -> list[tuple[float, Episode]]:
-        """Unify anchored episode contexts into a single list within the limit."""
+        """Unify anchored episode contexts into a single list within the limit.
+
+        Ranked contexts are consumed in order. Episodes with identical content
+        are skipped so later-ranked unique episodes can fill ``max_num_episodes``.
+        """
         episode_scores: dict[Episode, float] = {}
+        seen_contents: set[str] = set()
+
+        def try_add(episode: Episode, score: float) -> None:
+            if len(episode_scores) >= max_num_episodes:
+                return
+            if episode in episode_scores:
+                return
+            content_key = DeclarativeMemory._episode_content_key(episode)
+            if content_key in seen_contents:
+                return
+            episode_scores[episode] = score
+            seen_contents.add(content_key)
 
         for score, nuclear_episode, context in scored_anchored_episode_contexts:
             context = list(context)
@@ -717,13 +743,8 @@ class DeclarativeMemory:
                 break
             if (len(episode_scores) + len(context)) <= max_num_episodes:
                 # It is impossible that the context exceeds the limit.
-                episode_scores.update(
-                    {
-                        episode: score
-                        for episode in context
-                        if episode not in episode_scores
-                    }
-                )
+                for episode in context:
+                    try_add(episode, score)
             else:
                 # It is possible that the context exceeds the limit.
                 # Prioritize episodes near the nuclear episode.
@@ -745,7 +766,7 @@ class DeclarativeMemory:
                 for episode in nuclear_context:
                     if len(episode_scores) >= max_num_episodes:
                         break
-                    episode_scores.setdefault(episode, score)
+                    try_add(episode, score)
 
         unified_episode_context = sorted(
             [(score, episode) for episode, score in episode_scores.items()],

@@ -4,15 +4,11 @@ from __future__ import annotations
 
 import re
 
+from memmachine.semantic_memory.category_tags import normalize_category_tag
 from memmachine.semantic_memory.semantic_model import SemanticFeature
 from memmachine.server.prompt.agent_personality_prompt import (
-    AGENT_PERSONALITY_TAGS,
     get_category_manual_instruction_config,
 )
-
-_CATEGORY_TAG_DESCRIPTIONS: dict[str, dict[str, str]] = {
-    "agent_personality": AGENT_PERSONALITY_TAGS,
-}
 
 
 def _compile_blocked_patterns(category_name: str) -> tuple[re.Pattern[str], ...]:
@@ -29,13 +25,6 @@ def _compile_blocked_patterns(category_name: str) -> tuple[re.Pattern[str], ...]
 
 def normalize_manual_write_text(text: str) -> str:
     return " ".join(text.casefold().split())
-
-
-def get_allowed_tags_for_category(category_name: str) -> set[str] | None:
-    tag_descriptions = _CATEGORY_TAG_DESCRIPTIONS.get(category_name)
-    if tag_descriptions is None:
-        return None
-    return set(tag_descriptions.keys())
 
 
 def build_manual_instruction_system_prompt(*, category_name: str) -> str:
@@ -93,20 +82,8 @@ Choose exactly one best tag from: {allowed}
 
 
 def normalize_manual_write_tag(*, category_name: str, tag: str) -> str:
-    """Lowercase tag; map unknown agent_personality tags to default `style`."""
-    allowed_tags = get_allowed_tags_for_category(category_name)
-    normalized_tag = tag.strip().lower()
-    if allowed_tags is None:
-        return normalized_tag
-    if normalized_tag in allowed_tags:
-        return normalized_tag
-    if category_name == "agent_personality":
-        return "style"
-    allowed = ", ".join(sorted(allowed_tags))
-    raise ValueError(
-        f"Validation error: invalid tag '{tag}' for category '{category_name}'. "
-        f"Allowed tags: {allowed}",
-    )
+    """Same tag policy as extract: lowercase, unknown closed-set tags → default."""
+    return normalize_category_tag(category_name, tag)
 
 
 def validate_manual_write_tag(*, category_name: str, tag: str) -> None:

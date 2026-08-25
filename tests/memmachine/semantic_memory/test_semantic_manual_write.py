@@ -4,7 +4,6 @@ import pytest
 
 from memmachine.semantic_memory.semantic_manual_write import (
     build_manual_instruction_system_prompt,
-    is_false_manual_conflict_rejection,
     normalize_manual_write_tag,
     unique_manual_feature_name,
     validate_manual_write_append,

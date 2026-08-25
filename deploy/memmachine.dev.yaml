@@ -1,5 +1,3 @@
-name: pine-local-env
-
 services:
   # PostgreSQL with pgvector extension for MemMachine memory storage
   memmachine-postgres:
@@ -61,7 +59,7 @@ services:
       context: ..
       dockerfile: Dockerfile
     volumes:
-      - ../config/configuration_dev.yml:/app/configuration.yml:ro
+      - ./config/configuration_dev.yml
     environment:
       MEMORY_CONFIG: /app/configuration.yml
     env_file:
@@ -89,9 +87,3 @@ volumes:
     driver: local
   memmachine_neo4j_data:
     driver: local
-
-networks:
-  pine-local-env-net:
-    # Compose sanitizes project "-" to "_"; set exact name to keep hyphens.
-    name: pine-local-env_pine-local-env-net
-    external: true

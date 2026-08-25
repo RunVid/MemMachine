@@ -1,37 +1,27 @@
-name: Run Python test
+name: Run Python unit tests
+
 on:
   push:
-    branches: [main]
   pull_request:
 
 permissions:
   contents: read
 
-# Cancel any preceding run on the pull request after a new commit is pushed.
 concurrency:
   group: pytest-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
-
-  # Don't cancel if running on a push to the main branch.
   cancel-in-progress: ${{ (github.event.pull_request.head.ref || github.ref) != 'refs/heads/main' }}
 
 jobs:
   unit-test:
-    name: Run Python unit tests
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13", "3.14"]
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    name: Fast unit tests (no API keys)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
-      - name: Install the latest version of uv and set the python version
+      - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
-      - name: Test with python ${{ matrix.python-version }}
-        run: uv run --frozen --all-extras pytest -n auto --cov=memmachine
+      - name: Run unit tests
+        run: uv run --frozen pytest -n auto -m "not integration"

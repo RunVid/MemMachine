@@ -553,7 +553,7 @@ class RouterDoc:
     This endpoint acquires the per-`set_id` ingestion lock on the pod that
     handles the request. If ingestion or another consolidation already holds
     that lock, the request returns immediately with `lock_acquired: false`.
-    The lock is a 120-second lease renewed every 20 seconds while this pod
+    The lock is a 20-minute lease renewed every 5 minutes while this pod
     works, and is released when consolidation finishes (or if the process
     crashes, after the lease expires).
 

@@ -789,7 +789,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         self,
         set_id: SetIdT,
         owner_id: str,
-        timeout_seconds: int = 120,
+        timeout_seconds: int = 1200,
     ) -> bool:
         """
         Try to acquire an ingestion lock for the given set_id.
@@ -849,7 +849,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         self,
         set_id: SetIdT,
         owner_id: str,
-        timeout_seconds: int = 120,
+        timeout_seconds: int = 1200,
     ) -> bool:
         from datetime import datetime, timedelta
 

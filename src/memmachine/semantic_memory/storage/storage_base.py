@@ -184,7 +184,7 @@ class SemanticStorage(ABC):
         self,
         set_id: SetIdT,
         owner_id: str,
-        timeout_seconds: int = 120,
+        timeout_seconds: int = 1200,
     ) -> bool:
         """
         Try to acquire an ingestion lease for the given set_id.
@@ -203,7 +203,7 @@ class SemanticStorage(ABC):
         self,
         set_id: SetIdT,
         owner_id: str,
-        timeout_seconds: int = 120,
+        timeout_seconds: int = 1200,
     ) -> bool:
         """
         Extend expires_at for a lock held by this owner.

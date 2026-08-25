@@ -1,120 +1,143 @@
 # MemMachine
 
-<div align="center">
+This repository is an independent memory layer for AI agents, based on the
+original [MemMachine](https://github.com/MemMachine/MemMachine) project
+(Apache 2.0). It is not a drop-in replacement for upstream MemMachine, and it
+does not track or contribute back to that project.
 
-![GitHub Release Version](https://img.shields.io/github/v/release/memmachine/memmachine?display_name=release)
-![Discord](https://img.shields.io/discord/1412878659479666810)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/MemMachine/MemMachine)
-![GitHub License](https://img.shields.io/github/license/MemMachine/MemMachine)
-<br/>
-![Docker Pulls](https://img.shields.io/docker/pulls/memmachine/memmachine)
-![GitHub Downloads](https://img.shields.io/github/downloads/memmachine/memmachine/total?label=GitHub%20Downloads)
-<br/>
-![PyPI Downloads - memmachine-client](https://img.shields.io/pypi/dm/memmachine-client?label=PyPI%20Downloads%3A%20memmachine-client)
-![PyPI Downloads - memmachine-server](https://img.shields.io/pypi/dm/memmachine-server?label=PyPI%20Downloads%3A%20memmachine-server)
+The design is narrower and more operational:
 
-</div>
+- **Episodic memory stores claims**, not full chat transcripts.
+- **Semantic memory is organized by our category and tag schema.**
+- **Ingestion and consolidation are safe to run across multiple pods.**
 
-## Growing Community
+## What is different
 
-MemMachine is a growing community of builders and developers. Please help us grow by clicking the *Star* button above.
+### Claims as episodic memory
 
-<img src="https://starchart.cc/MemMachine/MemMachine.svg?variant=light" alt="Alt text" height="300"/>
+Upstream MemMachine treats conversational episodes (messages, sessions) as the
+unit of episodic memory. This implementation stores **claims**: discrete,
+self-contained statements about a user, an agent, or a setting.
 
-## Universal memory layer for AI Agents
+A claim is the input to extraction. Semantic prompts expect a stated fact or
+preference, not a multi-turn conversation. Chat history, if you have it, should
+be reduced to claims before it is written here.
 
-Meet MemMachine, an open-source memory layer for advanced AI agents. It enables
-AI-powered applications to learn, store, and recall data and preferences from
-past sessions to enrich future interactions. MemMachine's memory layer persists
-across multiple sessions, agents, and large language models, building a
-sophisticated, evolving user profile. It transforms AI chatbots into
-personalized, context-aware AI assistants designed to understand and respond
-with better precision and depth.
+### Category and tag schema
 
-## Who Is MemMachine For?
+Semantic features are not a flat bag of facts. Each feature belongs to a
+**category** (extraction domain) and a **tag** (allowed facet inside that
+domain).
 
-- Developers building AI agents, assistants, or autonomous workflows.
-- Researchers experimenting with agent architectures and cognitive models.
+```
+claim → category → tag → feature_name + value
+```
 
-## Key Features
+Built-in categories include:
 
-- **Multiple Memory Types:** MemMachine supports Working (Short Term),
-    Persistent (Long Term), and Personalized (Profile) memory types.
-- **Developer Friendly APIs:** Python SDK, RESTful, and MCP interfaces and
-    endpoints to make integrating MemMachine easy into your Agents. For more
-    information, refer to the
-    [API Reference Guide](https://docs.memmachine.ai/api_reference).
+| Category | Purpose | Example tags |
+| --- | --- | --- |
+| `agent_personality` | Stable agent behavior settings | `tone`, `persona`, `style`, `boundaries` |
+| `life_context` | Long-lived personal context | `interests`, `lifestyle`, `goals`, `personality`, `life_situation`, `general_preference` |
+| `task_assistant` | Structured facts for task completion | `basics`, `contacts`, `identities`, `accounts`, `preferences`, `relationships`, `services` |
+
+Tags are defined per category. Extractors must pick an existing tag rather than
+inventing new ones. Manual writes (for example agent personality) also validate
+against the allowed tag set.
+
+### Multi-pod deployment
+
+The server is meant to run as several replicas behind a load balancer, sharing
+PostgreSQL (and Neo4j when used). Duplicate work is avoided in storage, not in
+process-local queues:
+
+- Uningested claims are **claimed atomically** (`SELECT FOR UPDATE SKIP LOCKED`
+  on PostgreSQL; an equivalent ingest mark on Neo4j) so only one pod processes
+  a given history row.
+- Consolidation takes a **per-`set_id` lock** with expiry and cleanup, so two
+  pods do not consolidate the same set at once.
+
+Horizontal scale is therefore a deployment choice: add pods, point them at the
+same databases and config.
 
 ## Architecture
 
-1. Agents Interact via the API Layer
-    Users interact with an agent, which connects to the MemMachine Memory core through a RESTful API, Python SDK, or MCP Server.
-2. MemMachine Manages Memory
-    MemMachine processes interactions and stores them in two distinct types: Episodic Memory for conversational context and Profile Memory for long-term user facts.
-3. Data is Persisted to Databases
-    Memory is persisted to a database layer where Episodic Memory is stored in a graph database and Profile Memory is stored in an SQL database.
+1. Clients write **claims** through the REST API, Python SDK, or MCP.
+2. Claims are stored as episodic history.
+3. Background ingestion on any pod extracts semantic features into the
+   configured **category / tag** schema.
+4. Search returns episodic claims and/or consolidated semantic features.
 
-<div align="center">
+MemMachine is **not a hosted service**. You run the server yourself.
 
-![MemMachine Architecture](https://raw.githubusercontent.com/MemMachine/MemMachine/main/assets/img/MemMachine_Architecture.png)
+## Quick start
 
-</div>
+Docker is the usual path:
 
-## Use Cases & Example Agents
+```bash
+./memmachine-compose.sh
+```
 
-MemMachine's versatile memory architecture can be applied across any domain,
-transforming generic bots into specialized, expert assistants. Our growing list
-of [examples](examples/README.md) showcases the endless possibilities of
-memory-powered agents that integrate into your own applications and solutions.
+The script checks Docker, creates `.env` if needed, writes `cfg.yml` (or
+`configuration.yml`), and starts MemMachine plus PostgreSQL and Neo4j.
 
-- **CRM Agent:** Your agent can recall a client's entire history and deal stage,
-    proactively helping your sales team build relationships and close deals
-    faster.
-- **Healthcare Navigator:** Offer continuous patient support with an agent that
-    remembers medical history and tracks treatment progress to provide a
-    seamless healthcare journey.
-- **Personal Finance Advisor:** Your agent will remember a user's portfolio and
-    risk tolerance, delivering personalized financial insights based on their
-    complete history.
-- **Content Writer:** Build an assistant that remembers your unique style guide
-    and terminology, ensuring perfect consistency across all documentation.
+```bash
+./memmachine-compose.sh stop
+./memmachine-compose.sh restart
+./memmachine-compose.sh logs
+./memmachine-compose.sh clean   # removes data and volumes
+```
 
-We're excited to see what you're working on. Join the
-[Discord Server](https://discord.gg/usydANvKqD) and drop a shout-out to your
-project in the **showcase** channel.
+Python install:
 
-## Quick Start
+```bash
+pip install memmachine
+# or separately:
+pip install memmachine-client
+pip install memmachine-server
+```
 
-Want to get started right away? Check out our
-[Quick Start Guide](https://docs.memmachine.ai).
+Run the server:
 
-## Installation
+```bash
+memmachine-server --config cfg.yml
+```
 
-MemMachine is distributed as a Docker container and Python package. For full
-installation options, visit the [documentation](https://docs.memmachine.ai).
+Default API base: `http://localhost:8080/api/v2`.
 
-## Basic Usage
+## Usage sketch
 
-Get started with a simple "Hello World" example by following the
-[Quick Start Guide](https://docs.memmachine.ai/getting_started/quickstart).
+```python
+from memmachine import MemMachineClient
 
-## Documentation
+client = MemMachineClient(base_url="http://localhost:8080")
+project = client.create_project(org_id="my-org", project_id="my-project")
 
-- [Main Website](https://memmachine.ai)
-- [Docs & API Reference](https://docs.memmachine.ai)
+memory = project.memory(user_id="user123", agent_id="agent456")
 
-## Community & Support
+# Write a claim, not a chat turn
+memory.add(
+    content="Notify about emails from Peter",
+    role="user",
+    metadata={"type": "claim"},
+)
 
-- **Discord:** Join our Docker community for support, updates, and discussions:
-    [https://discord.gg/usydANvKqD](https://discord.gg/usydANvKqD)
-- **Issues & Feature Requests:** Use GitHub
-    [Issues](https://github.com/MemMachine/MemMachine/issues).
+results = memory.search(query="notification scope", limit=10)
+```
 
-## Contributing
+v2 APIs are scoped by `org_id` and `project_id`. See `AGENTS.md` for endpoint
+lists and more examples.
 
-We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for
-guidelines.
+## Configuration
+
+YAML (`cfg.yml` / `configuration.yml`) covers:
+
+- `resources.databases` — PostgreSQL (semantic) and Neo4j (episodic, if used)
+- `resources.embedders` / `resources.language_models`
+- `episodic_memory` / `semantic_memory` — including which semantic categories
+  are enabled for a project
 
 ## License
 
-MemMachine is released under the [Apache 2.0 License](LICENSE).
+Apache 2.0. See [LICENSE](LICENSE). This codebase includes work derived from
+the original MemMachine project.

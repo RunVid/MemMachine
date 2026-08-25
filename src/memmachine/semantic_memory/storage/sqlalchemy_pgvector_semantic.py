@@ -63,6 +63,13 @@ from memmachine.semantic_memory.storage.storage_base import (
 logger = logging.getLogger(__name__)
 
 
+def _result_rowcount(result: Any) -> int:
+    rowcount = getattr(result, "rowcount", 0)
+    if rowcount is None:
+        return 0
+    return int(rowcount)
+
+
 class BaseSemanticStorage(DeclarativeBase):
     """Declarative base for semantic memory SQLAlchemy models."""
 
@@ -820,7 +827,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             
             # If rowcount is 1, we successfully acquired the lock
             # If rowcount is 0, another pod already holds the lock
-            acquired = result.rowcount == 1
+            acquired = _result_rowcount(result) == 1
             
             if acquired:
                 logger.info(
@@ -860,7 +867,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             )
             result = await session.execute(update_stmt)
             await session.commit()
-            return result.rowcount == 1
+            return _result_rowcount(result) == 1
 
     async def release_ingestion_lock(
         self,
@@ -883,7 +890,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             result = await session.execute(delete_stmt)
             await session.commit()
             
-            if result.rowcount > 0:
+            if _result_rowcount(result) > 0:
                 logger.info(
                     "Released ingestion lock for set_id=%s, owner=%s",
                     set_id,
@@ -903,8 +910,9 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             result = await session.execute(delete_stmt)
             await session.commit()
             
-            if result.rowcount > 0:
+            cleaned = _result_rowcount(result)
+            if cleaned > 0:
                 logger.info(
                     "Cleaned up %d expired ingestion locks",
-                    result.rowcount,
+                    cleaned,
                 )

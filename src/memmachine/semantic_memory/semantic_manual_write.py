@@ -42,10 +42,13 @@ def build_manual_instruction_system_prompt(*, category_name: str) -> str:
             f"Invalid instruction prompt config for category '{category_name}'",
         )
 
+    tags = {
+        str(tag): str(description) for tag, description in tag_descriptions.items()
+    }
     tag_lines = "\n".join(
-        f"- {tag}: {description}" for tag, description in tag_descriptions.items()
+        f"- {tag}: {description}" for tag, description in tags.items()
     )
-    allowed = ", ".join(sorted(tag_descriptions.keys()))
+    allowed = ", ".join(sorted(tags))
     return f"""
 You convert a user's free-form instruction into one structured semantic memory feature.
 

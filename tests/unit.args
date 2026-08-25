@@ -1,0 +1,11 @@
+# Fast unit tests: in-memory / mocks only. No API keys, GPU extras, or containers.
+# Run: uv run pytest -n auto -m "not integration" @tests/unit.args
+tests/memmachine/semantic_memory/test_semantic_ingestion.py
+tests/memmachine/semantic_memory/storage/test_semantic_storage.py
+tests/memmachine/semantic_memory/test_category_tags.py
+tests/memmachine/semantic_memory/test_semantic_memory.py
+tests/memmachine/semantic_memory/test_semantic_memory_background.py
+tests/memmachine/semantic_memory/test_semantic_session_manager.py
+tests/memmachine/semantic_memory/test_semantic_session_resource.py
+tests/memmachine/semantic_memory/test_semantic_llm.py
+tests/memmachine/semantic_memory/test_semantic_manual_write.py

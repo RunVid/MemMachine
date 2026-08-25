@@ -13,6 +13,7 @@ from memmachine.common.api.spec import (
     AddMemoriesSpec,
     AddMemoryResult,
     ConsolidateMemoriesResponse,
+    ConsolidateMemoriesSpec,
     Episode,
     EpisodicSearchResult,
     ListMemoriesSpec,
@@ -314,7 +315,7 @@ async def _list_target_memories(
 
 
 async def _consolidate_memories(
-    spec: "ConsolidateMemoriesSpec",
+    spec: ConsolidateMemoriesSpec,
     memmachine: MemMachine,
 ) -> ConsolidateMemoriesResponse:
     """
@@ -330,8 +331,6 @@ async def _consolidate_memories(
     Returns:
         ConsolidateMemoriesResponse with lock acquisition status
     """
-    from memmachine.common.api.spec import ConsolidateMemoriesSpec
-
     logger.info(
         "Consolidating memories - set_id: %s, force: %s",
         spec.set_id,

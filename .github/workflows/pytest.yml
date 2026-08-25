@@ -24,4 +24,4 @@ jobs:
           python-version: "3.12"
 
       - name: Run unit tests
-        run: uv run --frozen pytest -n auto -m "not integration"
+        run: uv run --frozen pytest -n auto -m "not integration" @tests/unit.args

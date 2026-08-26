@@ -133,7 +133,7 @@ class SemanticStorage(ABC):
         limit: int | None = None,
         is_ingested: bool | None = None,
     ) -> list[EpisodeIdT]:
-        """Retrieve history ids. Does not change ingested status."""
+        """Retrieve history ids. May mark them ingested when claiming a batch."""
         raise NotImplementedError
 
     @abstractmethod

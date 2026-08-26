@@ -491,8 +491,9 @@ class ConsolidateMemoriesResponse(BaseModel):
     lock_acquired: Annotated[
         bool,
         Field(
-            description="True if the lock was acquired and processing attempted. "
-            "False if another process is already consolidating this set.",
+            description="True if this pod acquired the set lock and started "
+            "background consolidation. False if another owner already holds "
+            "the lock, or the set has no semantic categories.",
         ),
     ]
 
@@ -778,7 +779,11 @@ class WriteSemanticMemorySpec(_WithOrgAndProj):
 
     category: Annotated[
         str,
-        Field(..., description=SpecDoc.SEMANTIC_CATEGORY, examples=Examples.WRITE_SEMANTIC_CATEGORY),
+        Field(
+            ...,
+            description=SpecDoc.SEMANTIC_CATEGORY,
+            examples=Examples.WRITE_SEMANTIC_CATEGORY,
+        ),
     ]
     instruction: Annotated[
         str,
@@ -840,7 +845,9 @@ class WriteSemanticMemoryResponse(BaseModel):
 
     semantic_id: Annotated[
         SafeId,
-        Field(..., description=SpecDoc.SEMANTIC_METADATA_ID, examples=Examples.SEMANTIC_ID),
+        Field(
+            ..., description=SpecDoc.SEMANTIC_METADATA_ID, examples=Examples.SEMANTIC_ID
+        ),
     ]
     created: Annotated[
         bool,

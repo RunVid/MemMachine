@@ -532,7 +532,7 @@ class RouterDoc:
     processing new messages, but this endpoint allows manual triggering for:
 
     - Fixing malformed or duplicate memories
-    - Improving memory organization after bulk imports  
+    - Improving memory organization after bulk imports
     - Cleaning up memories after schema or configuration changes
     - Reducing memory count when thresholds are reached
 
@@ -550,10 +550,12 @@ class RouterDoc:
     - `force`: Set to `true` to bypass consolidation threshold checks (default: `false`)
 
     **Lock Acquisition:**
-    This endpoint acquires a distributed lock before processing to prevent race
-    conditions. If another process is already consolidating the same set_id,
-    the request will return immediately with `lock_acquired: false`. The lock
-    expires after 5 minutes to prevent deadlocks if a process crashes.
+    This endpoint acquires the per-`set_id` ingestion lock on the pod that
+    handles the request. If ingestion or another consolidation already holds
+    that lock, the request returns immediately with `lock_acquired: false`.
+    The lock is a 20-minute lease renewed every 5 minutes while this pod
+    works, and is released when consolidation finishes (or if the process
+    crashes, after the lease expires).
 
     **Consolidation Threshold:**
     By default, consolidation only runs when a memory set has at least 10 memories

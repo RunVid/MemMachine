@@ -35,6 +35,8 @@ from memmachine.episodic_memory import EpisodicMemory
 from memmachine.semantic_memory.semantic_model import FeatureIdT, SemanticFeature
 from memmachine.semantic_memory.semantic_session_manager import (
     ALL_MEMORY_TYPES as ALL_ISOLATION_TYPES,
+)
+from memmachine.semantic_memory.semantic_session_manager import (
     IsolationType,
 )
 
@@ -419,7 +421,9 @@ class MemMachine:
     ) -> ListResults:
         search_filter_expr = parse_filter(search_filter) if search_filter else None
         isolation = (
-            semantic_isolation if semantic_isolation is not None else ALL_ISOLATION_TYPES
+            semantic_isolation
+            if semantic_isolation is not None
+            else ALL_ISOLATION_TYPES
         )
 
         episodic_task: Task | None = None
@@ -543,8 +547,9 @@ class MemMachine:
         """
         Manually trigger consolidation for a specific set_id.
 
-        This method acquires a lock and starts consolidation in the background.
-        Returns immediately after lock acquisition without waiting for consolidation to complete.
+        This method acquires the per-set ingestion lock on this pod and starts
+        consolidation in the background. Returns immediately after lock
+        acquisition without waiting for consolidation to complete.
 
         Args:
             set_id: The set ID to consolidate (e.g., 'mem_user_xxx', 'mem_role_xxx')
@@ -552,21 +557,20 @@ class MemMachine:
 
         Returns:
             bool: True if lock was successfully acquired and consolidation started,
-                  False if lock is held by another process
+                  False if the lock is held by another owner or the set cannot be consolidated
+
         """
-        from memmachine.semantic_memory.semantic_ingestion import (
-            INGESTION_LLM_TIMEOUT_SECONDS,
-            INGESTION_LOCK_TIMEOUT_SECONDS,
-            IngestionService,
-        )
+        from memmachine.semantic_memory.semantic_ingestion import IngestionService
 
         semantic_service = await self._resources.get_semantic_service()
         semantic_manager = await self._resources.get_semantic_manager()
-        
+
         # Get storage through the semantic manager
-        semantic_storage = await semantic_manager._get_semantic_storage()
+        semantic_storage = await semantic_manager._get_semantic_storage()  # noqa: SLF001
         episode_storage = await self._resources.get_episode_storage()
-        resource_retriever = await semantic_manager.get_semantic_session_resource_manager()
+        resource_retriever = (
+            await semantic_manager.get_semantic_session_resource_manager()
+        )
 
         logger.info(
             "Triggering consolidation for set_id: %s (force: %s)",
@@ -583,16 +587,17 @@ class MemMachine:
                     set_id,
                 )
                 return False
-        except Exception as e:
-            logger.error(
-                "Failed to get resources for set_id %s: %s",
+        except Exception:
+            logger.exception(
+                "Failed to get resources for set_id %s",
                 set_id,
-                e,
             )
             return False
 
         # Use the forced threshold if force=True, otherwise use configured threshold
-        consolidation_threshold = 0 if force else semantic_service._consolidation_threshold
+        consolidation_threshold = (
+            0 if force else semantic_service._consolidation_threshold  # noqa: SLF001
+        )
 
         ingestion_service = IngestionService(
             params=IngestionService.Params(
@@ -602,64 +607,7 @@ class MemMachine:
                 consolidated_threshold=consolidation_threshold,
             ),
         )
-
-        # Try to acquire lock
-        logger.info(
-            "Attempting to acquire ingestion lock for set_id=%s, owner=%s",
-            set_id,
-            ingestion_service._owner_id,
-        )
-
-        lock_acquired = await semantic_storage.try_acquire_ingestion_lock(
+        return await ingestion_service.start_background_consolidation(
             set_id=set_id,
-            owner_id=ingestion_service._owner_id,
-            timeout_seconds=INGESTION_LOCK_TIMEOUT_SECONDS,
+            resources=resources,
         )
-
-        if not lock_acquired:
-            logger.info(
-                "SKIPPED set_id=%s - lock held by another process",
-                set_id,
-            )
-            return False
-
-        logger.info(
-            "ACQUIRED lock for set_id=%s, owner=%s - starting background consolidation",
-            set_id,
-            ingestion_service._owner_id,
-        )
-
-        # Run consolidation in background
-        async def _run_consolidation_with_lock() -> None:
-            try:
-                await ingestion_service._consolidate_set_memories_if_applicable(
-                    set_id=set_id,
-                    resources=resources,
-                    llm_timeout_seconds=INGESTION_LLM_TIMEOUT_SECONDS,
-                )
-                logger.info("Successfully consolidated set_id: %s", set_id)
-
-            except Exception:
-                logger.exception(
-                    "Failed to consolidate set_id %s",
-                    set_id,
-                )
-
-            finally:
-                # Always release the lock
-                await semantic_storage.release_ingestion_lock(
-                    set_id=set_id,
-                    owner_id=ingestion_service._owner_id,
-                )
-                logger.info(
-                    "RELEASED lock for set_id=%s, owner=%s - consolidation complete",
-                    set_id,
-                    ingestion_service._owner_id,
-                )
-
-        # Start background task and don't wait for it
-        asyncio.create_task(_run_consolidation_with_lock())
-
-        # Return immediately after acquiring lock
-        return True
-

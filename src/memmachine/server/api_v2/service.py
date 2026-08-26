@@ -6,13 +6,12 @@ from dataclasses import dataclass
 from fastapi import Request
 
 from memmachine import MemMachine
-
-logger = logging.getLogger(__name__)
 from memmachine.common.api import MemoryType as MemoryTypeE
 from memmachine.common.api.spec import (
     AddMemoriesSpec,
     AddMemoryResult,
     ConsolidateMemoriesResponse,
+    ConsolidateMemoriesSpec,
     Episode,
     EpisodicSearchResult,
     ListMemoriesSpec,
@@ -28,6 +27,8 @@ from memmachine.common.api.spec import (
 )
 from memmachine.common.episode_store.episode_model import EpisodeEntry
 from memmachine.semantic_memory.semantic_session_manager import IsolationType
+
+logger = logging.getLogger(__name__)
 
 
 # Placeholder dependency injection function
@@ -65,7 +66,7 @@ class _SessionData:
 
     @property
     def session_id(self) -> str | None:
-        return self.session_id_override if self.session_id_override else self.session_key
+        return self.session_id_override or self.session_key
 
 
 def _normalize_metadata_id(value: object | None) -> str | None:
@@ -314,7 +315,7 @@ async def _list_target_memories(
 
 
 async def _consolidate_memories(
-    spec: "ConsolidateMemoriesSpec",
+    spec: ConsolidateMemoriesSpec,
     memmachine: MemMachine,
 ) -> ConsolidateMemoriesResponse:
     """
@@ -329,9 +330,8 @@ async def _consolidate_memories(
 
     Returns:
         ConsolidateMemoriesResponse with lock acquisition status
-    """
-    from memmachine.common.api.spec import ConsolidateMemoriesSpec
 
+    """
     logger.info(
         "Consolidating memories - set_id: %s, force: %s",
         spec.set_id,
@@ -400,13 +400,17 @@ async def _write_semantic_memory(
     )
     isolation = _SEMANTIC_ISOLATION_MAP[spec.isolation]
 
-    tag, feature_name, value, semantic_id, created = (
-        await memmachine.write_semantic_from_instruction(
-            session_data=session_data,
-            isolation=isolation,
-            category_name=spec.category,
-            instruction=spec.instruction,
-        )
+    (
+        tag,
+        feature_name,
+        value,
+        semantic_id,
+        created,
+    ) = await memmachine.write_semantic_from_instruction(
+        session_data=session_data,
+        isolation=isolation,
+        category_name=spec.category,
+        instruction=spec.instruction,
     )
     return WriteSemanticMemoryResponse(
         semantic_id=semantic_id,
@@ -415,4 +419,3 @@ async def _write_semantic_memory(
         feature_name=feature_name,
         value=value,
     )
-

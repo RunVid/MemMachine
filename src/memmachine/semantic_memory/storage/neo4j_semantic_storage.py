@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from asyncio import Lock
 from collections.abc import Mapping
@@ -35,6 +36,8 @@ from memmachine.semantic_memory.storage.storage_base import (
     FeatureIdT,
     SemanticStorage,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_timestamp() -> float:
@@ -501,10 +504,9 @@ class Neo4jSemanticStorage(SemanticStorage):
     ) -> list[EpisodeIdT]:
         """
         Get history messages, atomically claiming them to prevent duplicate processing.
-        
-        In Neo4j, we immediately mark messages as ingested in the same query to prevent
-        other pods from processing them. Neo4j doesn't have SELECT FOR UPDATE SKIP LOCKED,
-        but we achieve similar behavior by marking messages as ingested atomically.
+
+        Immediately marks messages as ingested in the same query. Neo4j does not
+        have SELECT FOR UPDATE SKIP LOCKED; marking ingested is the claim.
         """
         query = ["MATCH (h:SetHistory)"]
         conditions = []
@@ -517,15 +519,12 @@ class Neo4jSemanticStorage(SemanticStorage):
             params["is_ingested"] = is_ingested
         if conditions:
             query.append("WHERE " + " AND ".join(conditions))
-        
-        # Immediately mark as ingested to prevent other pods from claiming them
-        # This achieves atomic claiming similar to SELECT FOR UPDATE SKIP LOCKED
         query.append("SET h.is_ingested = true")
         query.append("RETURN h.history_id AS history_id ORDER BY h.history_id")
         if limit is not None:
             query.append("LIMIT $limit")
             params["limit"] = limit
-        
+
         records, _, _ = await self._driver.execute_query("\n".join(query), **params)
         return [EpisodeIdT(record["history_id"]) for record in records]
 
@@ -1270,16 +1269,16 @@ class Neo4jSemanticStorage(SemanticStorage):
         self,
         set_id: SetIdT,
         owner_id: str,
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 1200,
     ) -> bool:
         """
         Try to acquire an ingestion lock for the given set_id.
-        
+
         Uses Neo4j MERGE with uniqueness constraint to atomically acquire the lock.
         """
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=timeout_seconds)
         now_ts = now.timestamp()
         expires_at_ts = expires_at.timestamp()
@@ -1300,7 +1299,7 @@ class Neo4jSemanticStorage(SemanticStorage):
         records, _, _ = await self._driver.execute_query(
             """
             MERGE (l:IngestionLock {set_id: $set_id})
-            ON CREATE SET 
+            ON CREATE SET
                 l.owner_id = $owner_id,
                 l.acquired_at = $now_ts,
                 l.expires_at = $expires_at_ts
@@ -1321,8 +1320,8 @@ class Neo4jSemanticStorage(SemanticStorage):
 
         # Check if we acquired the lock (owner_id matches and acquired_at matches our timestamp)
         acquired = (
-            lock_owner == owner_id 
-            and lock_acquired_at is not None 
+            lock_owner == owner_id
+            and lock_acquired_at is not None
             and abs(lock_acquired_at - now_ts) < 1.0  # Within 1 second tolerance
         )
 
@@ -1341,6 +1340,31 @@ class Neo4jSemanticStorage(SemanticStorage):
 
         return acquired
 
+    async def renew_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+        timeout_seconds: int = 1200,
+    ) -> bool:
+        from datetime import datetime, timedelta
+
+        expires_at_ts = (
+            datetime.now(UTC) + timedelta(seconds=timeout_seconds)
+        ).timestamp()
+        records, _, _ = await self._driver.execute_query(
+            """
+            MATCH (l:IngestionLock {set_id: $set_id, owner_id: $owner_id})
+            SET l.expires_at = $expires_at_ts
+            RETURN count(l) AS renewed_count
+            """,
+            set_id=set_id,
+            owner_id=owner_id,
+            expires_at_ts=expires_at_ts,
+        )
+        if not records:
+            return False
+        return int(dict(records[0]).get("renewed_count", 0) or 0) > 0
+
     async def release_ingestion_lock(
         self,
         set_id: SetIdT,
@@ -1348,7 +1372,7 @@ class Neo4jSemanticStorage(SemanticStorage):
     ) -> None:
         """
         Release an ingestion lock held by this owner.
-        
+
         Only deletes the lock if the owner_id matches.
         """
         result, _, _ = await self._driver.execute_query(
@@ -1370,9 +1394,9 @@ class Neo4jSemanticStorage(SemanticStorage):
 
     async def cleanup_expired_ingestion_locks(self) -> None:
         """Remove ingestion locks that have expired based on their timeout."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        now_ts = datetime.now(timezone.utc).timestamp()
+        now_ts = datetime.now(UTC).timestamp()
 
         result, _, _ = await self._driver.execute_query(
             """

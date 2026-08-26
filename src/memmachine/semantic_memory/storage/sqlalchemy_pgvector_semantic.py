@@ -1,6 +1,7 @@
 """SQLAlchemy-backed semantic storage implementation using pgvector."""
 
 import logging
+from datetime import UTC
 from pathlib import Path
 from typing import Any, overload
 
@@ -27,7 +28,8 @@ from sqlalchemy import (
     text,
     update,
 )
-from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import (
@@ -61,6 +63,13 @@ from memmachine.semantic_memory.storage.storage_base import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _result_rowcount(result: object) -> int:
+    rowcount = getattr(result, "rowcount", 0)
+    if rowcount is None:
+        return 0
+    return int(rowcount)
 
 
 class BaseSemanticStorage(DeclarativeBase):
@@ -416,7 +425,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         # Skip if no citations to add
         if not history_ids:
             return
-        
+
         try:
             feature_id_int = int(feature_id)
         except (TypeError, ValueError) as e:
@@ -445,12 +454,10 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
     ) -> list[EpisodeIdT]:
         """
         Get history messages, atomically claiming them to prevent duplicate processing.
-        
+
         Uses SELECT FOR UPDATE SKIP LOCKED to ensure only one pod can claim a message.
         Messages are immediately marked as ingested in the same transaction.
         """
-        # Use SELECT FOR UPDATE SKIP LOCKED to atomically claim messages
-        # This ensures only one pod can process a message at a time
         stmt = (
             select(SetIngestedHistory)
             .order_by(SetIngestedHistory.history_id.asc())
@@ -465,23 +472,16 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         )
 
         async with self._create_session() as session:
-            # Claim messages by locking them
             result = await session.execute(stmt)
             history_records = result.scalars().all()
-            
+
             if not history_records:
                 await session.commit()
                 return []
-            
-            # Immediately mark as ingested in the same transaction
-            # This ensures other pods cannot claim these messages
+
             history_ids = [r.history_id for r in history_records]
-            
-            # Optimize: If all records have the same set_id (common case), use single UPDATE
-            # Otherwise, group by set_id for correctness
             unique_set_ids = {r.set_id for r in history_records}
             if len(unique_set_ids) == 1:
-                # Common case: all messages from same set_id - single UPDATE
                 set_id = history_records[0].set_id
                 update_stmt = (
                     update(SetIngestedHistory)
@@ -491,13 +491,12 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
                 )
                 await session.execute(update_stmt)
             else:
-                # Multiple set_ids - group and update separately
                 history_ids_by_set: dict[str, list[str]] = {}
                 for record in history_records:
                     if record.set_id not in history_ids_by_set:
                         history_ids_by_set[record.set_id] = []
                     history_ids_by_set[record.set_id].append(record.history_id)
-                
+
                 for set_id, ids in history_ids_by_set.items():
                     update_stmt = (
                         update(SetIngestedHistory)
@@ -506,7 +505,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
                         .values(ingested=True)
                     )
                     await session.execute(update_stmt)
-            
+
             await session.commit()
 
         return TypeAdapter(list[EpisodeIdT]).validate_python(history_ids)
@@ -829,17 +828,17 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
         self,
         set_id: SetIdT,
         owner_id: str,
-        timeout_seconds: int = 300,
+        timeout_seconds: int = 1200,
     ) -> bool:
         """
         Try to acquire an ingestion lock for the given set_id.
-        
+
         Uses INSERT ... ON CONFLICT DO NOTHING to atomically try to acquire the lock.
         This prevents race conditions where multiple pods try to process the same set_id.
         """
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=timeout_seconds)
 
         async with self._create_session() as session:
@@ -860,17 +859,17 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
                 acquired_at=now,
                 expires_at=expires_at,
             )
-            
+
             # Use ON CONFLICT DO NOTHING - if lock exists, it will silently fail
             insert_stmt = insert_stmt.on_conflict_do_nothing(index_elements=["set_id"])
-            
+
             result = await session.execute(insert_stmt)
             await session.commit()
-            
+
             # If rowcount is 1, we successfully acquired the lock
             # If rowcount is 0, another pod already holds the lock
-            acquired = result.rowcount == 1
-            
+            acquired = _result_rowcount(result) == 1
+
             if acquired:
                 logger.info(
                     "Acquired ingestion lock for set_id=%s, owner=%s",
@@ -882,8 +881,34 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
                     "Failed to acquire ingestion lock for set_id=%s (another pod holds it)",
                     set_id,
                 )
-            
+
             return acquired
+
+    async def renew_ingestion_lock(
+        self,
+        set_id: SetIdT,
+        owner_id: str,
+        timeout_seconds: int = 1200,
+    ) -> bool:
+        from datetime import datetime, timedelta
+
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(seconds=timeout_seconds)
+
+        async with self._create_session() as session:
+            update_stmt = (
+                update(IngestionLock)
+                .where(
+                    and_(
+                        IngestionLock.set_id == set_id,
+                        IngestionLock.owner_id == owner_id,
+                    )
+                )
+                .values(expires_at=expires_at)
+            )
+            result = await session.execute(update_stmt)
+            await session.commit()
+            return _result_rowcount(result) == 1
 
     async def release_ingestion_lock(
         self,
@@ -892,7 +917,7 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
     ) -> None:
         """
         Release an ingestion lock held by this owner.
-        
+
         Only deletes the lock if the owner_id matches to prevent
         accidentally releasing another pod's lock.
         """
@@ -905,8 +930,8 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
             )
             result = await session.execute(delete_stmt)
             await session.commit()
-            
-            if result.rowcount > 0:
+
+            if _result_rowcount(result) > 0:
                 logger.info(
                     "Released ingestion lock for set_id=%s, owner=%s",
                     set_id,
@@ -915,19 +940,18 @@ class SqlAlchemyPgVectorSemanticStorage(SemanticStorage):
 
     async def cleanup_expired_ingestion_locks(self) -> None:
         """Remove ingestion locks that have expired based on their timeout."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         async with self._create_session() as session:
-            delete_stmt = delete(IngestionLock).where(
-                IngestionLock.expires_at <= now
-            )
+            delete_stmt = delete(IngestionLock).where(IngestionLock.expires_at <= now)
             result = await session.execute(delete_stmt)
             await session.commit()
-            
-            if result.rowcount > 0:
+
+            cleaned = _result_rowcount(result)
+            if cleaned > 0:
                 logger.info(
                     "Cleaned up %d expired ingestion locks",
-                    result.rowcount,
+                    cleaned,
                 )

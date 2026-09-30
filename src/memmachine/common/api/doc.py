@@ -149,6 +149,32 @@ class SpecDoc:
     KV_TOTAL = """
     Number of values stored for this key, including ones omitted by `limit`."""
 
+    LIBRARY_ROLE_ID = """
+    Role identifier that owns these files. Files for one role are not visible
+    to another role in the same project."""
+
+    LIBRARY_NAME = """
+    File name. Unique for this project and role. Creating the same name again
+    is rejected."""
+
+    LIBRARY_NEW_NAME = """
+    Replacement file name. Omit it to keep the current name. The new name must
+    be unique for this project and role. A name that already exists is rejected
+    and the existing file is left unchanged."""
+
+    LIBRARY_CONTENT = """
+    Document body, stored as written. It is not extracted into profile or
+    agent personality. At most 40000 characters."""
+
+    LIBRARY_CREATED_AT = """
+    UTC time when this file was created."""
+
+    LIBRARY_UPDATED_AT = """
+    UTC time when this file's body was last replaced."""
+
+    LIBRARY_FILES = """
+    File names and update times. Bodies are omitted."""
+
     SEMANTIC_METADATA_OTHER = "Additional storage metadata for the semantic feature."
 
     EPISODIC_SHORT_EPISODES = "Matched short-term episodic entries."
@@ -367,6 +393,12 @@ class Examples:
         "2026-09-07, caller claimed to be Dr Smith's office and confirmed Tuesday at 10.",
     ]
     KV_LIMIT: ClassVar[list[int]] = [5]
+    LIBRARY_ROLE_ID: ClassVar[list[str]] = ["library"]
+    LIBRARY_NAME: ClassVar[list[str]] = ["服务范围"]
+    LIBRARY_NEW_NAME: ClassVar[list[str]] = ["营业时间"]
+    LIBRARY_CONTENT: ClassVar[list[str]] = [
+        "Weekday service covers the office floors and the lobby.",
+    ]
 
 
 class RouterDoc:
@@ -443,7 +475,8 @@ class RouterDoc:
     following the same rules as project creation.
 
     This operation removes the project and all associated memories, including
-    episodes and role-scoped key-value entries, permanently from the system.
+    episodes, role-scoped key-value entries, and library files, permanently
+    from the system.
     It cannot be undone.
 
     If the project does not exist, a not-found error is returned.
@@ -559,6 +592,44 @@ class RouterDoc:
 
     Matching is an exact key lookup, not a semantic search. Results are newest
     first. `limit` defaults to 5; send null to return the full history.
+    """
+
+    CREATE_LIBRARY = """
+    Create a named document for one role.
+
+    Required fields: `role_id`, `name`, and `content`. The name must be unique
+    for this project and role. A duplicate name is rejected and the existing
+    file is left unchanged. The body is stored as written and is not extracted
+    into episodic or semantic memory.
+    """
+
+    UPDATE_LIBRARY = """
+    Replace the body of an existing library file, and optionally its name.
+
+    `name` selects the existing file. `new_name` renames it when present.
+    If the file does not exist, the request is rejected and no file is created.
+    If `new_name` is already used in this project and role, the request is
+    rejected and the existing file is left unchanged.
+    """
+
+    DELETE_LIBRARY = """
+    Delete one library file by name.
+
+    If the file does not exist, a not-found error is returned.
+    """
+
+    GET_LIBRARY = """
+    Read one library file by name.
+
+    This is an exact name lookup, not a semantic search. If the file does not
+    exist, a not-found error is returned.
+    """
+
+    LIST_LIBRARY = """
+    List library file names for one role.
+
+    Response entries contain the name and last update time. Document bodies
+    are omitted. An empty list is returned when the role has no files.
     """
 
     DELETE_SEMANTIC_MEMORY = """

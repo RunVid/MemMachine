@@ -26,6 +26,11 @@ from memmachine.common.api.spec import (
     InvalidNameError,
     KvListResponse,
     KvRecord,
+    LibraryFileResponse,
+    LibraryFileSpec,
+    LibraryListResponse,
+    LibraryNameSpec,
+    ListLibrarySpec,
     ListMemoriesSpec,
     ListResult,
     ProjectConfig,
@@ -33,6 +38,7 @@ from memmachine.common.api.spec import (
     RestErrorModel,
     SearchMemoriesSpec,
     SearchResult,
+    UpdateLibrarySpec,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
 )
@@ -44,6 +50,7 @@ from memmachine.common.configuration.episodic_config import (
 from memmachine.common.errors import (
     ConfigurationError,
     InvalidArgumentError,
+    LibraryNameExistsError,
     ResourceNotFoundError,
     SessionAlreadyExistsError,
     SessionNotFoundError,
@@ -53,10 +60,15 @@ from memmachine.server.api_v2.service import (
     _add_messages_to,
     _append_kv,
     _consolidate_memories,
+    _create_library,
+    _delete_library,
     _get_kv,
+    _get_library,
+    _list_library,
     _list_target_memories,
     _search_target_memories,
     _SessionData,
+    _update_library,
     _write_semantic_memory,
     get_memmachine,
 )
@@ -443,6 +455,84 @@ async def get_kv(
         raise RestError(
             code=500, message="Unable to read key-value entries", ex=e
         ) from e
+
+
+def _library_error(error: Exception, *, action: str) -> RestError:
+    if isinstance(error, LibraryNameExistsError):
+        return RestError(code=409, message=str(error), ex=error)
+    if isinstance(error, ResourceNotFoundError):
+        return RestError(code=404, message=str(error), ex=error)
+    if isinstance(error, ValueError):
+        return RestError(code=422, message="invalid argument", ex=error)
+    return RestError(code=500, message=f"Unable to {action}", ex=error)
+
+
+@router.post(
+    "/memories/library",
+    status_code=201,
+    description=RouterDoc.CREATE_LIBRARY,
+)
+async def create_library(
+    spec: LibraryFileSpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> LibraryFileResponse:
+    """Create a named document that is not extracted into semantic memory."""
+    try:
+        return await _create_library(spec=spec, memmachine=memmachine)
+    except Exception as e:
+        raise _library_error(e, action="create library file") from e
+
+
+@router.post("/memories/library/update", description=RouterDoc.UPDATE_LIBRARY)
+async def update_library(
+    spec: UpdateLibrarySpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> LibraryFileResponse:
+    """Replace the body of an existing library file, and its name when requested."""
+    try:
+        return await _update_library(spec=spec, memmachine=memmachine)
+    except Exception as e:
+        raise _library_error(e, action="update library file") from e
+
+
+@router.post(
+    "/memories/library/delete",
+    status_code=204,
+    description=RouterDoc.DELETE_LIBRARY,
+)
+async def delete_library(
+    spec: LibraryNameSpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> None:
+    """Delete one library file by name."""
+    try:
+        await _delete_library(spec=spec, memmachine=memmachine)
+    except Exception as e:
+        raise _library_error(e, action="delete library file") from e
+
+
+@router.post("/memories/library/get", description=RouterDoc.GET_LIBRARY)
+async def get_library(
+    spec: LibraryNameSpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> LibraryFileResponse:
+    """Read one library file by name."""
+    try:
+        return await _get_library(spec=spec, memmachine=memmachine)
+    except Exception as e:
+        raise _library_error(e, action="read library file") from e
+
+
+@router.post("/memories/library/list", description=RouterDoc.LIST_LIBRARY)
+async def list_library(
+    spec: ListLibrarySpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> LibraryListResponse:
+    """List library file names for one role."""
+    try:
+        return await _list_library(spec=spec, memmachine=memmachine)
+    except Exception as e:
+        raise _library_error(e, action="list library files") from e
 
 
 @router.post(

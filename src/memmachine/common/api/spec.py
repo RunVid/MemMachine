@@ -1155,6 +1155,147 @@ class KvListResponse(BaseModel):
     total: Annotated[int, Field(..., description=SpecDoc.KV_TOTAL)]
 
 
+LIBRARY_NAME_MAX_LENGTH = 256
+LIBRARY_CONTENT_MAX_LENGTH = 40000
+
+
+def _library_name(value: str) -> str:
+    name = value.strip()
+    if not name:
+        raise ValueError("name is required")
+    if len(name) > LIBRARY_NAME_MAX_LENGTH:
+        raise ValueError(f"name must be at most {LIBRARY_NAME_MAX_LENGTH} characters")
+    return name
+
+
+def _library_content(value: str) -> str:
+    if not value.strip():
+        raise ValueError("content is required")
+    if len(value) > LIBRARY_CONTENT_MAX_LENGTH:
+        raise ValueError(
+            f"content must be at most {LIBRARY_CONTENT_MAX_LENGTH} characters"
+        )
+    return value
+
+
+class LibraryFileSpec(_WithOrgAndProj):
+    """Create or replace one named document. The body is stored as written."""
+
+    role_id: Annotated[
+        SafeId,
+        Field(
+            ..., description=SpecDoc.LIBRARY_ROLE_ID, examples=Examples.LIBRARY_ROLE_ID
+        ),
+    ]
+    name: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_NAME, examples=Examples.LIBRARY_NAME),
+    ]
+    content: Annotated[
+        str,
+        Field(
+            ...,
+            description=SpecDoc.LIBRARY_CONTENT,
+            examples=Examples.LIBRARY_CONTENT,
+        ),
+    ]
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        return _library_name(value)
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        return _library_content(value)
+
+
+class UpdateLibrarySpec(LibraryFileSpec):
+    """Replace a library file body and, when ``new_name`` is set, its name."""
+
+    new_name: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=SpecDoc.LIBRARY_NEW_NAME,
+            examples=Examples.LIBRARY_NEW_NAME,
+        ),
+    ] = None
+
+    @field_validator("new_name")
+    @classmethod
+    def validate_new_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _library_name(value)
+
+
+class LibraryNameSpec(_WithOrgAndProj):
+    """Identify one library file by name."""
+
+    role_id: Annotated[
+        SafeId,
+        Field(
+            ..., description=SpecDoc.LIBRARY_ROLE_ID, examples=Examples.LIBRARY_ROLE_ID
+        ),
+    ]
+    name: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_NAME, examples=Examples.LIBRARY_NAME),
+    ]
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        return _library_name(value)
+
+
+class ListLibrarySpec(_WithOrgAndProj):
+    """List file names for one role."""
+
+    role_id: Annotated[
+        SafeId,
+        Field(
+            ..., description=SpecDoc.LIBRARY_ROLE_ID, examples=Examples.LIBRARY_ROLE_ID
+        ),
+    ]
+
+
+class LibraryFileResponse(BaseModel):
+    """One stored library document."""
+
+    name: Annotated[str, Field(..., description=SpecDoc.LIBRARY_NAME)]
+    content: Annotated[str, Field(..., description=SpecDoc.LIBRARY_CONTENT)]
+    created_at: Annotated[
+        AwareDatetime,
+        Field(..., description=SpecDoc.LIBRARY_CREATED_AT),
+    ]
+    updated_at: Annotated[
+        AwareDatetime,
+        Field(..., description=SpecDoc.LIBRARY_UPDATED_AT),
+    ]
+
+
+class LibraryNameResponse(BaseModel):
+    """A file name without its body."""
+
+    name: Annotated[str, Field(..., description=SpecDoc.LIBRARY_NAME)]
+    updated_at: Annotated[
+        AwareDatetime,
+        Field(..., description=SpecDoc.LIBRARY_UPDATED_AT),
+    ]
+
+
+class LibraryListResponse(BaseModel):
+    """File names for one role, newest update first."""
+
+    files: Annotated[
+        list[LibraryNameResponse],
+        Field(..., description=SpecDoc.LIBRARY_FILES),
+    ]
+
+
 class Version(BaseModel):
     """Model representing version information."""
 

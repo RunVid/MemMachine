@@ -778,7 +778,11 @@ class WriteSemanticMemorySpec(_WithOrgAndProj):
 
     category: Annotated[
         str,
-        Field(..., description=SpecDoc.SEMANTIC_CATEGORY, examples=Examples.WRITE_SEMANTIC_CATEGORY),
+        Field(
+            ...,
+            description=SpecDoc.SEMANTIC_CATEGORY,
+            examples=Examples.WRITE_SEMANTIC_CATEGORY,
+        ),
     ]
     instruction: Annotated[
         str,
@@ -840,7 +844,9 @@ class WriteSemanticMemoryResponse(BaseModel):
 
     semantic_id: Annotated[
         SafeId,
-        Field(..., description=SpecDoc.SEMANTIC_METADATA_ID, examples=Examples.SEMANTIC_ID),
+        Field(
+            ..., description=SpecDoc.SEMANTIC_METADATA_ID, examples=Examples.SEMANTIC_ID
+        ),
     ]
     created: Annotated[
         bool,
@@ -1044,6 +1050,109 @@ class RestErrorModel(BaseModel):
             description=SpecDoc.ERROR_TRACE,
         ),
     ]
+
+
+KV_PREPARED_CONTEXT_LIMIT = 5
+KV_KEY_MAX_LENGTH = 512
+KV_VALUE_MAX_LENGTH = 4000
+KV_LIST_LIMIT_MAX = 500
+
+
+def _bounded_kv_text(value: str, *, field_name: str, max_length: int) -> str:
+    text = value.strip()
+    if not text:
+        raise ValueError(f"{field_name} is required")
+    if len(text) > max_length:
+        raise ValueError(f"{field_name} must be at most {max_length} characters")
+    return text
+
+
+class AppendKvSpec(_WithOrgAndProj):
+    """Append one value under a role-scoped key. Does not enter semantic memory."""
+
+    role_id: Annotated[
+        SafeId,
+        Field(..., description=SpecDoc.KV_ROLE_ID, examples=Examples.KV_ROLE_ID),
+    ]
+    key: Annotated[
+        str,
+        Field(..., description=SpecDoc.KV_KEY, examples=Examples.KV_KEY),
+    ]
+    value: Annotated[
+        str,
+        Field(..., description=SpecDoc.KV_VALUE, examples=Examples.KV_VALUE),
+    ]
+
+    @field_validator("key")
+    @classmethod
+    def validate_key(cls, value: str) -> str:
+        return _bounded_kv_text(value, field_name="key", max_length=KV_KEY_MAX_LENGTH)
+
+    @field_validator("value")
+    @classmethod
+    def validate_value(cls, value: str) -> str:
+        return _bounded_kv_text(
+            value,
+            field_name="value",
+            max_length=KV_VALUE_MAX_LENGTH,
+        )
+
+
+class GetKvSpec(_WithOrgAndProj):
+    """Read the newest values for one role-scoped key."""
+
+    role_id: Annotated[
+        SafeId,
+        Field(..., description=SpecDoc.KV_ROLE_ID, examples=Examples.KV_ROLE_ID),
+    ]
+    key: Annotated[
+        str,
+        Field(..., description=SpecDoc.KV_KEY, examples=Examples.KV_KEY),
+    ]
+    limit: Annotated[
+        int | None,
+        Field(
+            default=KV_PREPARED_CONTEXT_LIMIT,
+            description=SpecDoc.KV_LIMIT,
+            examples=Examples.KV_LIMIT,
+        ),
+    ]
+
+    @field_validator("key")
+    @classmethod
+    def validate_key(cls, value: str) -> str:
+        return _bounded_kv_text(value, field_name="key", max_length=KV_KEY_MAX_LENGTH)
+
+    @field_validator("limit")
+    @classmethod
+    def validate_limit(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value < 1 or value > KV_LIST_LIMIT_MAX:
+            raise ValueError(
+                f"limit must be between 1 and {KV_LIST_LIMIT_MAX}, or null for the full log",
+            )
+        return value
+
+
+class KvRecord(BaseModel):
+    """One stored key-value entry."""
+
+    id: Annotated[str, Field(..., description=SpecDoc.KV_ID)]
+    key: Annotated[str, Field(..., description=SpecDoc.KV_KEY)]
+    value: Annotated[str, Field(..., description=SpecDoc.KV_VALUE)]
+    created_at: Annotated[
+        AwareDatetime,
+        Field(..., description=SpecDoc.KV_CREATED_AT),
+    ]
+
+
+class KvListResponse(BaseModel):
+    """Newest-first values for one key, plus the full count."""
+
+    key: Annotated[str, Field(..., description=SpecDoc.KV_KEY)]
+    entries: Annotated[list[KvRecord], Field(..., description=SpecDoc.KV_ENTRIES)]
+    total: Annotated[int, Field(..., description=SpecDoc.KV_TOTAL)]
 
 
 class Version(BaseModel):

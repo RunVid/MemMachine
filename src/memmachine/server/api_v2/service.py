@@ -12,9 +12,13 @@ from memmachine.common.api import MemoryType as MemoryTypeE
 from memmachine.common.api.spec import (
     AddMemoriesSpec,
     AddMemoryResult,
+    AppendKvSpec,
     ConsolidateMemoriesResponse,
     Episode,
     EpisodicSearchResult,
+    GetKvSpec,
+    KvListResponse,
+    KvRecord,
     ListMemoriesSpec,
     ListResult,
     ListResultContent,
@@ -27,6 +31,7 @@ from memmachine.common.api.spec import (
     WriteSemanticMemorySpec,
 )
 from memmachine.common.episode_store.episode_model import EpisodeEntry
+from memmachine.kv_store.model import KvEntry
 from memmachine.semantic_memory.semantic_session_manager import IsolationType
 
 
@@ -414,5 +419,40 @@ async def _write_semantic_memory(
         tag=tag,
         feature_name=feature_name,
         value=value,
+    )
+
+
+def _kv_record(entry: KvEntry) -> KvRecord:
+    return KvRecord(
+        id=entry.id,
+        key=entry.key,
+        value=entry.value,
+        created_at=entry.created_at,
+    )
+
+
+async def _append_kv(spec: AppendKvSpec, memmachine: MemMachine) -> KvRecord:
+    entry = await memmachine.append_kv(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        role_id=spec.role_id,
+        key=spec.key,
+        value=spec.value,
+    )
+    return _kv_record(entry)
+
+
+async def _get_kv(spec: GetKvSpec, memmachine: MemMachine) -> KvListResponse:
+    page = await memmachine.list_kv(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        role_id=spec.role_id,
+        key=spec.key,
+        limit=spec.limit,
+    )
+    return KvListResponse(
+        key=page.key,
+        entries=[_kv_record(entry) for entry in page.entries],
+        total=page.total,
     )
 

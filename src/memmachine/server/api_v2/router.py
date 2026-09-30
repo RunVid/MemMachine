@@ -13,6 +13,7 @@ from memmachine.common.api.doc import RouterDoc
 from memmachine.common.api.spec import (
     AddMemoriesResponse,
     AddMemoriesSpec,
+    AppendKvSpec,
     ConsolidateMemoriesResponse,
     ConsolidateMemoriesSpec,
     CreateProjectSpec,
@@ -20,8 +21,11 @@ from memmachine.common.api.spec import (
     DeleteProjectSpec,
     DeleteSemanticMemorySpec,
     EpisodeCountResponse,
+    GetKvSpec,
     GetProjectSpec,
     InvalidNameError,
+    KvListResponse,
+    KvRecord,
     ListMemoriesSpec,
     ListResult,
     ProjectConfig,
@@ -47,7 +51,9 @@ from memmachine.common.errors import (
 from memmachine.main.memmachine import ALL_MEMORY_TYPES
 from memmachine.server.api_v2.service import (
     _add_messages_to,
+    _append_kv,
     _consolidate_memories,
+    _get_kv,
     _list_target_memories,
     _search_target_memories,
     _SessionData,
@@ -407,6 +413,38 @@ async def delete_semantic_memory(
         ) from e
 
 
+@router.post("/memories/kv", status_code=201, description=RouterDoc.APPEND_KV)
+async def append_kv(
+    spec: AppendKvSpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> KvRecord:
+    """Append a role-scoped key-value entry outside semantic memory."""
+    try:
+        return await _append_kv(spec=spec, memmachine=memmachine)
+    except ValueError as e:
+        raise RestError(code=422, message="invalid argument", ex=e) from e
+    except Exception as e:
+        raise RestError(
+            code=500, message="Unable to append key-value entry", ex=e
+        ) from e
+
+
+@router.post("/memories/kv/get", description=RouterDoc.GET_KV)
+async def get_kv(
+    spec: GetKvSpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> KvListResponse:
+    """Read the newest values for one role-scoped key."""
+    try:
+        return await _get_kv(spec=spec, memmachine=memmachine)
+    except ValueError as e:
+        raise RestError(code=422, message="invalid argument", ex=e) from e
+    except Exception as e:
+        raise RestError(
+            code=500, message="Unable to read key-value entries", ex=e
+        ) from e
+
+
 @router.post(
     "/memories/consolidate",
     description=RouterDoc.CONSOLIDATE_MEMORIES,
@@ -435,9 +473,7 @@ async def consolidate_memories(
     except SessionNotFoundError as e:
         raise RestError(code=404, message="Project does not exist", ex=e) from e
     except Exception as e:
-        raise RestError(
-            code=500, message="Unable to consolidate memories", ex=e
-        ) from e
+        raise RestError(code=500, message="Unable to consolidate memories", ex=e) from e
 
 
 @router.get("/metrics", description=RouterDoc.METRICS_PROMETHEUS)

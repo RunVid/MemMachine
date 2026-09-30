@@ -1,0 +1,228 @@
+"""Postgres library stored beside semantic memory."""
+
+from datetime import UTC, datetime
+
+from sqlalchemy import (
+    Column,
+    ColumnElement,
+    DateTime,
+    MetaData,
+    String,
+    Table,
+    UniqueConstraint,
+    delete,
+    select,
+    update,
+)
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+
+from memmachine.common.errors import LibraryNameExistsError, ResourceNotFoundError
+from memmachine.library_store.model import LibraryFile, LibraryName
+
+metadata = MetaData()
+
+library_entry_table = Table(
+    "library_entry",
+    metadata,
+    Column("org_id", String, nullable=False),
+    Column("project_id", String, nullable=False),
+    Column("role_id", String, nullable=False),
+    Column("name", String, nullable=False),
+    Column("content", String, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    UniqueConstraint(
+        "org_id",
+        "project_id",
+        "role_id",
+        "name",
+        name="uq_library_entry_name",
+    ),
+)
+
+
+def _file_from_mapping(mapping: object) -> LibraryFile:
+    row = dict(mapping)  # type: ignore[call-overload]
+    return LibraryFile(
+        name=str(row["name"]),
+        content=str(row["content"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _missing(name: str) -> ResourceNotFoundError:
+    return ResourceNotFoundError(f"Library file '{name}' not found")
+
+
+class SqlLibraryStore:
+    """One document per name in the ``library_entry`` table."""
+
+    def __init__(self, engine: AsyncEngine) -> None:
+        """Bind the store to the semantic memory SQL engine."""
+        self._engine = engine
+        self._session_factory = async_sessionmaker(
+            bind=self._engine,
+            expire_on_commit=False,
+        )
+
+    def _session(self) -> AsyncSession:
+        return self._session_factory()
+
+    def _scope(
+        self,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        name: str,
+    ) -> ColumnElement[bool]:
+        table = library_entry_table.c
+        return (
+            (table.org_id == org_id)
+            & (table.project_id == project_id)
+            & (table.role_id == role_id)
+            & (table.name == name)
+        )
+
+    async def startup(self) -> None:
+        async with self._engine.begin() as conn:
+            await conn.run_sync(metadata.create_all)
+
+    async def create(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        name: str,
+        content: str,
+    ) -> LibraryFile:
+        now = datetime.now(UTC)
+        stmt = library_entry_table.insert().values(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            name=name,
+            content=content,
+            created_at=now,
+            updated_at=now,
+        )
+        async with self._session() as session:
+            try:
+                await session.execute(stmt)
+                await session.commit()
+            except IntegrityError as error:
+                await session.rollback()
+                raise LibraryNameExistsError(name) from error
+        return LibraryFile(
+            name=name,
+            content=content,
+            created_at=now,
+            updated_at=now,
+        )
+
+    async def update(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        name: str,
+        content: str,
+        new_name: str | None = None,
+    ) -> LibraryFile:
+        target = name if new_name is None or new_name == name else new_name
+        now = datetime.now(UTC)
+        values: dict[str, object] = {"content": content, "updated_at": now}
+        if target != name:
+            values["name"] = target
+        stmt = (
+            update(library_entry_table)
+            .where(self._scope(org_id, project_id, role_id, name))
+            .values(**values)
+        )
+        async with self._session() as session:
+            try:
+                result = await session.execute(stmt)
+                if result.rowcount == 0:
+                    await session.rollback()
+                    raise _missing(name)
+                await session.commit()
+            except IntegrityError as error:
+                await session.rollback()
+                raise LibraryNameExistsError(target) from error
+        return await self.get(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            name=target,
+        )
+
+    async def get(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        name: str,
+    ) -> LibraryFile:
+        stmt = select(library_entry_table).where(
+            self._scope(org_id, project_id, role_id, name)
+        )
+        async with self._session() as session:
+            row = (await session.execute(stmt)).mappings().first()
+        if row is None:
+            raise _missing(name)
+        return _file_from_mapping(row)
+
+    async def delete(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        name: str,
+    ) -> None:
+        stmt = delete(library_entry_table).where(
+            self._scope(org_id, project_id, role_id, name)
+        )
+        async with self._session() as session:
+            result = await session.execute(stmt)
+            if result.rowcount == 0:
+                await session.rollback()
+                raise _missing(name)
+            await session.commit()
+
+    async def list_names(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+    ) -> list[LibraryName]:
+        table = library_entry_table.c
+        stmt = (
+            select(table.name, table.updated_at)
+            .where(
+                (table.org_id == org_id)
+                & (table.project_id == project_id)
+                & (table.role_id == role_id)
+            )
+            .order_by(table.updated_at.desc(), table.name.asc())
+        )
+        async with self._session() as session:
+            rows = (await session.execute(stmt)).mappings().all()
+        return [
+            LibraryName(name=str(row["name"]), updated_at=row["updated_at"])
+            for row in rows
+        ]
+
+    async def delete_project(self, *, org_id: str, project_id: str) -> None:
+        table = library_entry_table.c
+        stmt = delete(library_entry_table).where(
+            (table.org_id == org_id) & (table.project_id == project_id)
+        )
+        async with self._session() as session:
+            await session.execute(stmt)
+            await session.commit()

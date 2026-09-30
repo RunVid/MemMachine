@@ -33,6 +33,8 @@ from memmachine.common.resource_manager.resource_manager import ResourceManagerI
 from memmachine.common.session_manager.session_data_manager import SessionDataManager
 from memmachine.episodic_memory import EpisodicMemory
 from memmachine.kv_store.model import KvEntry, KvList
+from memmachine.library_store.model import LibraryFile, LibraryName
+from memmachine.library_store.protocol import LibraryStore
 from memmachine.semantic_memory.semantic_model import FeatureIdT, SemanticFeature
 from memmachine.semantic_memory.semantic_session_manager import (
     ALL_MEMORY_TYPES as ALL_ISOLATION_TYPES,
@@ -236,11 +238,20 @@ class MemMachine:
             store = await (await self._resources.get_semantic_manager()).get_kv_store()
             await store.delete_project(org_id=org_id, project_id=project_id)
 
+        async def _delete_library() -> None:
+            org_id, separator, project_id = session_data.session_key.partition("/")
+            if separator == "" or org_id == "" or project_id == "":
+                return
+            manager = await self._resources.get_semantic_manager()
+            store = await manager.get_library_store()
+            await store.delete_project(org_id=org_id, project_id=project_id)
+
         tasks = [
             _delete_episode_store(),
             _delete_episodic_memory(),
             _delete_semantic_memory(),
             _delete_kv(),
+            _delete_library(),
         ]
 
         await asyncio.gather(*tasks)
@@ -428,7 +439,9 @@ class MemMachine:
     ) -> ListResults:
         search_filter_expr = parse_filter(search_filter) if search_filter else None
         isolation = (
-            semantic_isolation if semantic_isolation is not None else ALL_ISOLATION_TYPES
+            semantic_isolation
+            if semantic_isolation is not None
+            else ALL_ISOLATION_TYPES
         )
 
         episodic_task: Task | None = None
@@ -571,11 +584,13 @@ class MemMachine:
 
         semantic_service = await self._resources.get_semantic_service()
         semantic_manager = await self._resources.get_semantic_manager()
-        
+
         # Get storage through the semantic manager
         semantic_storage = await semantic_manager._get_semantic_storage()
         episode_storage = await self._resources.get_episode_storage()
-        resource_retriever = await semantic_manager.get_semantic_session_resource_manager()
+        resource_retriever = (
+            await semantic_manager.get_semantic_session_resource_manager()
+        )
 
         logger.info(
             "Triggering consolidation for set_id: %s (force: %s)",
@@ -601,7 +616,9 @@ class MemMachine:
             return False
 
         # Use the forced threshold if force=True, otherwise use configured threshold
-        consolidation_threshold = 0 if force else semantic_service._consolidation_threshold
+        consolidation_threshold = (
+            0 if force else semantic_service._consolidation_threshold
+        )
 
         ingestion_service = IngestionService(
             params=IngestionService.Params(
@@ -710,3 +727,95 @@ class MemMachine:
             limit=limit,
         )
 
+    async def _library_store(self) -> LibraryStore:
+        manager = await self._resources.get_semantic_manager()
+        return await manager.get_library_store()
+
+    async def create_library(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        name: str,
+        content: str,
+    ) -> LibraryFile:
+        """Create a named document without writing episodic or semantic memory."""
+        store = await self._library_store()
+        return await store.create(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            name=name,
+            content=content,
+        )
+
+    async def update_library(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        name: str,
+        content: str,
+        new_name: str | None = None,
+    ) -> LibraryFile:
+        """Replace the body of an existing library file, and its name when requested."""
+        store = await self._library_store()
+        return await store.update(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            name=name,
+            content=content,
+            new_name=new_name,
+        )
+
+    async def get_library(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        name: str,
+    ) -> LibraryFile:
+        """Return one library file by name."""
+        store = await self._library_store()
+        return await store.get(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            name=name,
+        )
+
+    async def delete_library(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        name: str,
+    ) -> None:
+        """Delete one library file by name."""
+        store = await self._library_store()
+        await store.delete(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            name=name,
+        )
+
+    async def list_library(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+    ) -> list[LibraryName]:
+        """Return library file names for one role, newest update first."""
+        store = await self._library_store()
+        return await store.list_names(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+        )

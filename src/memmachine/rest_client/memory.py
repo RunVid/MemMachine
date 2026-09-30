@@ -24,11 +24,17 @@ from memmachine.common.api.spec import (
     GetKvSpec,
     KvListResponse,
     KvRecord,
+    LibraryFileResponse,
+    LibraryFileSpec,
+    LibraryListResponse,
+    LibraryNameSpec,
+    ListLibrarySpec,
     ListMemoriesSpec,
     ListResult,
     MemoryMessage,
     SearchMemoriesSpec,
     SearchResult,
+    UpdateLibrarySpec,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
 )
@@ -821,6 +827,144 @@ class Memory:
         )
         response.raise_for_status()
         return KvListResponse(**response.json())
+
+    def create_library(
+        self,
+        *,
+        name: str,
+        content: str,
+        role_id: str = "",
+        timeout: int | None = None,
+    ) -> LibraryFileResponse:
+        """
+        Create a named document for this project.
+
+        The body is stored as written and is not extracted into semantic memory.
+        A duplicate name is rejected.
+        """
+        if self._client_closed:
+            raise RuntimeError("Cannot create library file: client has been closed")
+
+        spec = LibraryFileSpec(
+            org_id=self.__org_id,
+            project_id=self.__project_id,
+            role_id=self._require_role_id(role_id),
+            name=name,
+            content=content,
+        )
+        response = self.client.request(
+            "POST",
+            f"{self.client.base_url}/api/v2/memories/library",
+            json=spec.model_dump(mode="json"),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return LibraryFileResponse(**response.json())
+
+    def update_library(
+        self,
+        *,
+        name: str,
+        content: str,
+        new_name: str | None = None,
+        role_id: str = "",
+        timeout: int | None = None,
+    ) -> LibraryFileResponse:
+        """Replace the body of an existing library file. Pass ``new_name`` to rename it."""
+        if self._client_closed:
+            raise RuntimeError("Cannot update library file: client has been closed")
+
+        spec = UpdateLibrarySpec(
+            org_id=self.__org_id,
+            project_id=self.__project_id,
+            role_id=self._require_role_id(role_id),
+            name=name,
+            content=content,
+            new_name=new_name,
+        )
+        response = self.client.request(
+            "POST",
+            f"{self.client.base_url}/api/v2/memories/library/update",
+            json=spec.model_dump(mode="json"),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return LibraryFileResponse(**response.json())
+
+    def delete_library(
+        self,
+        *,
+        name: str,
+        role_id: str = "",
+        timeout: int | None = None,
+    ) -> None:
+        """Delete one library file by name."""
+        if self._client_closed:
+            raise RuntimeError("Cannot delete library file: client has been closed")
+
+        spec = LibraryNameSpec(
+            org_id=self.__org_id,
+            project_id=self.__project_id,
+            role_id=self._require_role_id(role_id),
+            name=name,
+        )
+        response = self.client.request(
+            "POST",
+            f"{self.client.base_url}/api/v2/memories/library/delete",
+            json=spec.model_dump(mode="json"),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+
+    def get_library(
+        self,
+        *,
+        name: str,
+        role_id: str = "",
+        timeout: int | None = None,
+    ) -> LibraryFileResponse:
+        """Read one library file by name."""
+        if self._client_closed:
+            raise RuntimeError("Cannot read library file: client has been closed")
+
+        spec = LibraryNameSpec(
+            org_id=self.__org_id,
+            project_id=self.__project_id,
+            role_id=self._require_role_id(role_id),
+            name=name,
+        )
+        response = self.client.request(
+            "POST",
+            f"{self.client.base_url}/api/v2/memories/library/get",
+            json=spec.model_dump(mode="json"),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return LibraryFileResponse(**response.json())
+
+    def list_library(
+        self,
+        *,
+        role_id: str = "",
+        timeout: int | None = None,
+    ) -> LibraryListResponse:
+        """List library file names for one role. Bodies are omitted."""
+        if self._client_closed:
+            raise RuntimeError("Cannot list library files: client has been closed")
+
+        spec = ListLibrarySpec(
+            org_id=self.__org_id,
+            project_id=self.__project_id,
+            role_id=self._require_role_id(role_id),
+        )
+        response = self.client.request(
+            "POST",
+            f"{self.client.base_url}/api/v2/memories/library/list",
+            json=spec.model_dump(mode="json"),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return LibraryListResponse(**response.json())
 
     def mark_client_closed(self) -> None:
         """Mark this memory instance as closed by its owning client."""

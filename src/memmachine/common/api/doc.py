@@ -121,6 +121,34 @@ class SpecDoc:
 
     SEMANTIC_METADATA_ID = "Identifier for the semantic feature."
 
+    KV_ROLE_ID = """
+    Role identifier that owns this key-value log. Entries for one role are not
+    visible to another role in the same project."""
+
+    KV_KEY = """
+    Exact lookup key. The same key can hold many appended values, for example
+    `calls from +1510123123`."""
+
+    KV_VALUE = """
+    One appended value. Stored as written. It is not extracted into profile or
+    agent personality."""
+
+    KV_LIMIT = """
+    How many of the newest values to return. Defaults to 5 for prepared context.
+    Send null to return the full history for that key."""
+
+    KV_ID = """
+    Identifier of one appended key-value entry."""
+
+    KV_CREATED_AT = """
+    UTC time when this value was appended."""
+
+    KV_ENTRIES = """
+    Matching values, newest first."""
+
+    KV_TOTAL = """
+    Number of values stored for this key, including ones omitted by `limit`."""
+
     SEMANTIC_METADATA_OTHER = "Additional storage metadata for the semantic feature."
 
     EPISODIC_SHORT_EPISODES = "Matched short-term episodic entries."
@@ -333,6 +361,12 @@ class Examples:
     SEARCH_RESULT_STATUS: ClassVar[list[int]] = [0]
     SERVER_VERSION: ClassVar[list[str]] = ["0.1.2", "0.2.0"]
     CLIENT_VERSION: ClassVar[list[str]] = ["0.1.2", "0.2.0"]
+    KV_ROLE_ID: ClassVar[list[str]] = ["call_log"]
+    KV_KEY: ClassVar[list[str]] = ["calls from +1510123123"]
+    KV_VALUE: ClassVar[list[str]] = [
+        "2026-09-07, caller claimed to be Dr Smith's office and confirmed Tuesday at 10.",
+    ]
+    KV_LIMIT: ClassVar[list[int]] = [5]
 
 
 class RouterDoc:
@@ -408,8 +442,9 @@ class RouterDoc:
     Deletes the specified project identified by `org_id` and `project_id`,
     following the same rules as project creation.
 
-    This operation removes the project and all associated memories (episodes)
-    permanently from the system. It cannot be undone.
+    This operation removes the project and all associated memories, including
+    episodes and role-scoped key-value entries, permanently from the system.
+    It cannot be undone.
 
     If the project does not exist, a not-found error is returned.
     """
@@ -509,6 +544,21 @@ class RouterDoc:
 
     Use this endpoint for settings-side persona edits. Conversation-driven extraction
     should continue to use `POST /memories`.
+    """
+
+    APPEND_KV = """
+    Append one value under a role-scoped key.
+
+    Required fields: `role_id`, `key`, and `value`. The same key may be appended
+    many times. Rows are stored in the existing Postgres database and are not
+    written to episodic or semantic memory.
+    """
+
+    GET_KV = """
+    Read values for one role-scoped key.
+
+    Matching is an exact key lookup, not a semantic search. Results are newest
+    first. `limit` defaults to 5; send null to return the full history.
     """
 
     DELETE_SEMANTIC_MEMORY = """

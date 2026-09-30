@@ -32,6 +32,7 @@ from memmachine.common.filter.filter_parser import (
 from memmachine.common.resource_manager.resource_manager import ResourceManagerImpl
 from memmachine.common.session_manager.session_data_manager import SessionDataManager
 from memmachine.episodic_memory import EpisodicMemory
+from memmachine.kv_store.model import KvEntry, KvList
 from memmachine.semantic_memory.semantic_model import FeatureIdT, SemanticFeature
 from memmachine.semantic_memory.semantic_session_manager import (
     ALL_MEMORY_TYPES as ALL_ISOLATION_TYPES,
@@ -228,10 +229,18 @@ class MemMachine:
                 semantic_memory_manager.delete_messages(session_data=session_data),
             )
 
+        async def _delete_kv() -> None:
+            org_id, separator, project_id = session_data.session_key.partition("/")
+            if separator == "" or org_id == "" or project_id == "":
+                return
+            store = await (await self._resources.get_semantic_manager()).get_kv_store()
+            await store.delete_project(org_id=org_id, project_id=project_id)
+
         tasks = [
             _delete_episode_store(),
             _delete_episodic_memory(),
             _delete_semantic_memory(),
+            _delete_kv(),
         ]
 
         await asyncio.gather(*tasks)
@@ -662,4 +671,42 @@ class MemMachine:
 
         # Return immediately after acquiring lock
         return True
+
+    async def append_kv(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        key: str,
+        value: str,
+    ) -> KvEntry:
+        """Append a role-scoped value without writing episodic or semantic memory."""
+        store = await (await self._resources.get_semantic_manager()).get_kv_store()
+        return await store.append(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            key=key,
+            value=value,
+        )
+
+    async def list_kv(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        key: str,
+        limit: int | None,
+    ) -> KvList:
+        """Return the newest values for one role-scoped key."""
+        store = await (await self._resources.get_semantic_manager()).get_kv_store()
+        return await store.list_latest(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            key=key,
+            limit=limit,
+        )
 

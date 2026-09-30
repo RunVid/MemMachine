@@ -18,8 +18,12 @@ from memmachine.common.api.spec import (
     AddMemoriesResponse,
     AddMemoriesSpec,
     AddMemoryResult,
+    AppendKvSpec,
     DeleteEpisodicMemorySpec,
     DeleteSemanticMemorySpec,
+    GetKvSpec,
+    KvListResponse,
+    KvRecord,
     ListMemoriesSpec,
     ListResult,
     MemoryMessage,
@@ -747,6 +751,76 @@ class Memory:
             conditions.append(f"{key}='{escaped_value}'")
 
         return " AND ".join(conditions)
+
+    def _require_role_id(self, role_id: str) -> str:
+        chosen = role_id.strip() or self.__metadata.get("role_id", "").strip()
+        if not chosen:
+            raise ValueError("role_id is required")
+        return chosen
+
+    def append_kv(
+        self,
+        *,
+        key: str,
+        value: str,
+        role_id: str = "",
+        timeout: int | None = None,
+    ) -> KvRecord:
+        """
+        Append one value under a role-scoped key.
+
+        The value is stored as written and is not extracted into semantic memory.
+        """
+        if self._client_closed:
+            raise RuntimeError("Cannot append key-value entry: client has been closed")
+
+        spec = AppendKvSpec(
+            org_id=self.__org_id,
+            project_id=self.__project_id,
+            role_id=self._require_role_id(role_id),
+            key=key,
+            value=value,
+        )
+        response = self.client.request(
+            "POST",
+            f"{self.client.base_url}/api/v2/memories/kv",
+            json=spec.model_dump(mode="json"),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return KvRecord(**response.json())
+
+    def get_kv(
+        self,
+        *,
+        key: str,
+        role_id: str = "",
+        limit: int | None = 5,
+        timeout: int | None = None,
+    ) -> KvListResponse:
+        """
+        Read the newest values for one role-scoped key.
+
+        ``limit`` defaults to 5. Pass ``None`` to return the full history.
+        """
+        if self._client_closed:
+            raise RuntimeError("Cannot read key-value entries: client has been closed")
+
+        spec = GetKvSpec(
+            org_id=self.__org_id,
+            project_id=self.__project_id,
+            role_id=self._require_role_id(role_id),
+            key=key,
+            limit=limit,
+        )
+        response = self.client.request(
+            "POST",
+            f"{self.client.base_url}/api/v2/memories/kv/get",
+            json=spec.model_dump(mode="json"),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return KvListResponse(**response.json())
 
     def mark_client_closed(self) -> None:
         """Mark this memory instance as closed by its owning client."""

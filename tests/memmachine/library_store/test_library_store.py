@@ -1,6 +1,5 @@
 """Tests for the role-scoped library."""
 
-import asyncio
 from uuid import uuid4
 
 import pytest
@@ -10,58 +9,59 @@ from sqlalchemy.pool import StaticPool
 
 from memmachine.common.api.spec import (
     LIBRARY_CONTENT_MAX_LENGTH,
+    LIBRARY_DESCRIPTION_MAX_LENGTH,
     CreateLibrarySpec,
     LibraryIdSpec,
 )
-from memmachine.common.errors import (
-    LibraryNameExistsError,
-    LibraryTimeoutError,
-    ResourceNotFoundError,
-)
+from memmachine.common.errors import LibraryNameExistsError, ResourceNotFoundError
 from memmachine.library_store.memory_store import InMemoryLibraryStore
-from memmachine.library_store.naming import (
-    LIBRARY_TITLE_MAX_CONCURRENT,
-    choose_available_name,
-    resolve_title,
-    sample_for_title,
-)
 from memmachine.library_store.protocol import LibraryStore
 from memmachine.library_store.sql_store import SqlLibraryStore
 
 
-def test_create_spec_keeps_markdown_and_rejects_blank_content():
+def test_create_spec_requires_name_and_validates_fields():
     spec = CreateLibrarySpec(
         org_id="org",
         project_id="project",
         role_id="library",
+        name="服务范围",
         content="  # 服务范围\n\n工作日覆盖前厅。  ",
-        timeout=30,
+        description="Lobby coverage",
     )
     assert spec.content.startswith("  #")
-    assert spec.name is None
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
             org_id="org",
             project_id="project",
             role_id="library",
+            name="服务范围",
             content="   ",
-            timeout=30,
         )
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
             org_id="org",
             project_id="project",
             role_id="library",
+            name="服务范围",
             content="x" * (LIBRARY_CONTENT_MAX_LENGTH + 1),
-            timeout=30,
         )
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
             org_id="org",
             project_id="project",
             role_id="library",
+            name="服务范围",
             content="正文",
-            timeout=0,
+            description="line one\nline two",
+        )
+    with pytest.raises(ValidationError):
+        CreateLibrarySpec(
+            org_id="org",
+            project_id="project",
+            role_id="library",
+            name="服务范围",
+            content="正文",
+            description="x" * (LIBRARY_DESCRIPTION_MAX_LENGTH + 1),
         )
 
 
@@ -81,67 +81,12 @@ def test_id_spec_requires_a_uuid():
         )
 
 
-def test_title_sample_keeps_edges_and_headings():
-    body = "# 开头\n" + ("甲" * 5000) + "\n# 中间\n" + ("乙" * 5000) + "结尾标记"
-    sample = sample_for_title(body)
-    assert "# 开头" in sample
-    assert "# 中间" in sample
-    assert "结尾标记" in sample
-    assert len(sample) < len(body)
-
-
-def test_suggested_name_avoids_names_already_in_scope():
-    assert choose_available_name("  服务范围  ", set()) == "服务范围"
-    assert choose_available_name("服务范围", {"服务范围"}) == "服务范围 2"
-
-
-@pytest.mark.asyncio
-async def test_title_generation_stops_at_the_concurrency_limit():
-    started = 0
-    release = asyncio.Event()
-
-    async def hold(_content: str, _existing: set[str]) -> str:
-        nonlocal started
-        started += 1
-        await release.wait()
-        return "服务范围"
-
-    tasks = [
-        asyncio.create_task(
-            resolve_title(
-                name=None,
-                content="正文",
-                existing=set(),
-                seconds=2,
-                suggest=hold,
-            )
-        )
-        for _ in range(LIBRARY_TITLE_MAX_CONCURRENT + 1)
-    ]
-    await asyncio.sleep(0.05)
-    assert started == LIBRARY_TITLE_MAX_CONCURRENT
-    release.set()
-    await asyncio.gather(*tasks)
-    assert started == LIBRARY_TITLE_MAX_CONCURRENT + 1
-
-
-@pytest.mark.asyncio
-async def test_resolve_title_times_out_before_a_title_is_accepted():
-    async def slow(_content: str, _existing: set[str]) -> str:
-        await asyncio.sleep(0.05)
-        return "服务范围"
-
-    with pytest.raises(LibraryTimeoutError):
-        await resolve_title(
-            name=None,
-            content="正文",
-            existing=set(),
-            seconds=0.01,
-            suggest=slow,
-        )
-
-
-async def _create(store: LibraryStore, name: str, content: str = "正文") -> str:
+async def _create(
+    store: LibraryStore,
+    name: str,
+    content: str = "正文",
+    description: str = "",
+) -> str:
     created = await store.create(
         org_id="org",
         project_id="project",
@@ -149,8 +94,30 @@ async def _create(store: LibraryStore, name: str, content: str = "正文") -> st
         file_id=str(uuid4()),
         name=name,
         content=content,
+        description=description,
     )
     return created.id
+
+
+@pytest.mark.asyncio
+async def test_get_returns_name_content_and_description():
+    store = InMemoryLibraryStore()
+    file_id = await _create(
+        store,
+        "服务范围",
+        content="body",
+        description="Lobby coverage",
+    )
+    file = await store.get(
+        org_id="org",
+        project_id="project",
+        role_id="library",
+        file_id=file_id,
+    )
+    assert file.name == "服务范围"
+    assert file.content == "body"
+    assert file.description == "Lobby coverage"
+    assert file.always_loaded is False
 
 
 @pytest.mark.asyncio

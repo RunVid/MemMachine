@@ -477,6 +477,8 @@ def _library_file(file: LibraryFile) -> LibraryFileResponse:
         id=file.id,
         name=file.name,
         content=file.content,
+        description=file.description,
+        always_loaded=file.always_loaded,
         created_at=file.created_at,
         updated_at=file.updated_at,
     )
@@ -494,9 +496,9 @@ async def _create_library(
         org_id=spec.org_id,
         project_id=spec.project_id,
         role_id=spec.role_id,
-        content=spec.content,
-        seconds=spec.timeout,
         name=spec.name,
+        content=spec.content,
+        description=spec.description,
     )
     return _library_file(file)
 

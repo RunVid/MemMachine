@@ -158,16 +158,19 @@ class SpecDoc:
     when the title changes."""
 
     LIBRARY_NAME = """
-    Display title. Unique for this project and role. Omit it on create to
-    generate one from the body. Markdown is stored as plain text."""
-
-    LIBRARY_TIMEOUT = """
-    Seconds allowed to finish choosing a title. If this expires, nothing is
-    stored."""
+    Display title chosen by the client. Unique for this project and role.
+    Markdown is stored as plain text."""
 
     LIBRARY_CONTENT = """
     Document body, stored as written. It is not extracted into profile or
     agent personality. At most 40000 characters."""
+
+    LIBRARY_DESCRIPTION = """
+    One-line summary for the file. Single line, at most 512 characters.
+    Defaults to an empty string."""
+
+    LIBRARY_ALWAYS_LOADED = """
+    Reserved for future use. New files are stored as false. Not used yet."""
 
     LIBRARY_CREATED_AT = """
     UTC time when this file was created."""
@@ -399,7 +402,7 @@ class Examples:
     LIBRARY_ROLE_ID: ClassVar[list[str]] = ["library"]
     LIBRARY_ID: ClassVar[list[str]] = ["8d0c1a2e-4b3f-4e1a-9c2d-6f7a8b9c0d1e"]
     LIBRARY_NAME: ClassVar[list[str]] = ["服务范围"]
-    LIBRARY_TIMEOUT: ClassVar[list[float]] = [30]
+    LIBRARY_DESCRIPTION: ClassVar[list[str]] = ["Weekday lobby and office coverage"]
     LIBRARY_CONTENT: ClassVar[list[str]] = [
         "Weekday service covers the office floors and the lobby.",
     ]
@@ -601,15 +604,9 @@ class RouterDoc:
     CREATE_LIBRARY = """
     Store one document for one role.
 
-    Required fields: `role_id`, `content`, and `timeout`. `name` is optional.
-    When `name` is omitted, a title is chosen from a short sample of the body
-    and the titles already in this scope, then the file is written. At most
-    twenty titles are generated at once on the single server process.
-    By default the call uses gpt-4o-mini and leaves the semantic extraction
-    model unchanged. Set `library_title_model` to choose another model id.
-    Waiting for a free slot counts toward
-    `timeout`. The file appears in the list only after that write. If
-    `timeout` expires first, nothing is stored. Markdown is kept as plain
+    Required fields: `role_id`, `name`, and `content`. Optional `description`
+    is a one-line summary. Duplicate names in the same project and role
+    return 409 and leave existing files unchanged. Markdown is kept as plain
     text and is not extracted into episodic or semantic memory.
     """
 
@@ -636,8 +633,8 @@ class RouterDoc:
     GET_LIBRARY = """
     Read one library file by id.
 
-    This is an id lookup, not a semantic search. If the id does not exist,
-    a not-found error is returned.
+    Returns the title, body, and description. This is an id lookup, not a
+    semantic search. If the id does not exist, a not-found error is returned.
     """
 
     LIST_LIBRARY = """

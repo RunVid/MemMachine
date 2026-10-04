@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    Boolean,
     Column,
     ColumnElement,
     DateTime,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     Table,
     UniqueConstraint,
     delete,
+    false,
     select,
     update,
 )
@@ -31,6 +33,8 @@ library_entry_table = Table(
     Column("role_id", String, nullable=False),
     Column("name", String, nullable=False),
     Column("content", String, nullable=False),
+    Column("description", String, nullable=False, server_default=""),
+    Column("always_loaded", Boolean, nullable=False, server_default=false()),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     UniqueConstraint(
@@ -49,6 +53,8 @@ def _file_from_mapping(mapping: object) -> LibraryFile:
         id=str(row["id"]),
         name=str(row["name"]),
         content=str(row["content"]),
+        description=str(row.get("description", "") or ""),
+        always_loaded=bool(row.get("always_loaded", False)),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -100,6 +106,7 @@ class SqlLibraryStore:
         file_id: str,
         name: str,
         content: str,
+        description: str = "",
     ) -> LibraryFile:
         now = datetime.now(UTC)
         stmt = library_entry_table.insert().values(
@@ -109,6 +116,8 @@ class SqlLibraryStore:
             role_id=role_id,
             name=name,
             content=content,
+            description=description,
+            always_loaded=False,
             created_at=now,
             updated_at=now,
         )
@@ -123,6 +132,8 @@ class SqlLibraryStore:
             id=file_id,
             name=name,
             content=content,
+            description=description,
+            always_loaded=False,
             created_at=now,
             updated_at=now,
         )

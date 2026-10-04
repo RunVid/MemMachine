@@ -52,7 +52,6 @@ from memmachine.common.errors import (
     ConfigurationError,
     InvalidArgumentError,
     LibraryNameExistsError,
-    LibraryTimeoutError,
     ResourceNotFoundError,
     SessionAlreadyExistsError,
     SessionNotFoundError,
@@ -461,8 +460,6 @@ async def get_kv(
 
 
 def _library_error(error: Exception, *, action: str) -> RestError:
-    if isinstance(error, LibraryTimeoutError):
-        return RestError(code=408, message=str(error), ex=error)
     if isinstance(error, LibraryNameExistsError):
         return RestError(code=409, message=str(error), ex=error)
     if isinstance(error, ResourceNotFoundError):
@@ -481,7 +478,7 @@ async def create_library(
     spec: CreateLibrarySpec,
     memmachine: Annotated[MemMachine, Depends(get_memmachine)],
 ) -> LibraryFileResponse:
-    """Store one document after its title is ready."""
+    """Store one document with a client-chosen title."""
     try:
         return await _create_library(spec=spec, memmachine=memmachine)
     except Exception as e:

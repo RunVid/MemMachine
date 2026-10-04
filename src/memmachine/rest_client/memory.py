@@ -833,16 +833,15 @@ class Memory:
         self,
         *,
         content: str,
-        timeout: float,
-        name: str | None = None,
+        name: str,
         role_id: str = "",
+        description: str = "",
+        timeout: int | None = None,
     ) -> LibraryFileResponse:
         """
-        Store one document.
+        Store one document with a user-chosen title and optional one-line summary.
 
-        ``timeout`` is how long MemMachine may spend choosing a title. The HTTP
-        wait is longer than that, so a timeout response means the file was not stored.
-        Omit ``name`` to generate a title. Markdown is stored as plain text.
+        Duplicate titles in the same project and role return 409.
         """
         if self._client_closed:
             raise RuntimeError("Cannot create library file: client has been closed")
@@ -851,15 +850,15 @@ class Memory:
             org_id=self.__org_id,
             project_id=self.__project_id,
             role_id=self._require_role_id(role_id),
-            content=content,
             name=name,
-            timeout=timeout,
+            content=content,
+            description=description,
         )
         response = self.client.request(
             "POST",
             f"{self.client.base_url}/api/v2/memories/library",
             json=spec.model_dump(mode="json"),
-            timeout=timeout + 5,
+            timeout=timeout,
         )
         response.raise_for_status()
         return LibraryFileResponse(**response.json())

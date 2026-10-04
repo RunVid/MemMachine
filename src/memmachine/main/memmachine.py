@@ -18,11 +18,7 @@ from memmachine.common.configuration.episodic_config import (
     ShortTermMemoryConfPartial,
 )
 from memmachine.common.episode_store import Episode, EpisodeEntry, EpisodeIdT
-from memmachine.common.errors import (
-    ConfigurationError,
-    LibraryNameExistsError,
-    SessionNotFoundError,
-)
+from memmachine.common.errors import ConfigurationError, SessionNotFoundError
 from memmachine.common.filter.filter_parser import (
     And as FilterAnd,
 )
@@ -39,11 +35,6 @@ from memmachine.common.session_manager.session_data_manager import SessionDataMa
 from memmachine.episodic_memory import EpisodicMemory
 from memmachine.kv_store.model import KvEntry, KvList
 from memmachine.library_store.model import LibraryFile, LibraryName
-from memmachine.library_store.naming import (
-    choose_available_name,
-    resolve_title,
-    sample_for_title,
-)
 from memmachine.library_store.protocol import LibraryStore
 from memmachine.semantic_memory.semantic_model import FeatureIdT, SemanticFeature
 from memmachine.semantic_memory.semantic_session_manager import (
@@ -747,83 +738,21 @@ class MemMachine:
         org_id: str,
         project_id: str,
         role_id: str,
-        content: str,
-        seconds: float,
-        name: str | None = None,
-    ) -> LibraryFile:
-        """Store one document after its title is ready. A timeout writes nothing."""
-        names = await self.list_library(
-            org_id=org_id,
-            project_id=project_id,
-            role_id=role_id,
-        )
-        taken = {item.name for item in names}
-        title, generated = await resolve_title(
-            name=name,
-            content=content,
-            existing=taken,
-            seconds=seconds,
-            suggest=self._suggest_library_title,
-        )
-        return await self._insert_library(
-            org_id=org_id,
-            project_id=project_id,
-            role_id=role_id,
-            name=title,
-            content=content,
-            allow_suffix=generated,
-            taken=taken,
-        )
-
-    async def _suggest_library_title(self, content: str, existing: set[str]) -> str:
-        model_name = self._conf.semantic_memory.library_title_model.strip()
-        if model_name:
-            model = await self._resources.get_language_model(model_name)
-        else:
-            model = await self._resources.get_language_model_with_model(
-                self._conf.semantic_memory.llm_model,
-                "gpt-4o-mini",
-            )
-        taken = "\n".join(sorted(existing)) or "(none)"
-        suggested, _ = await model.generate_response(
-            system_prompt=(
-                "Suggest one short file title. Use the document's language. "
-                "Return only the title. Do not reuse a name from this list:\n"
-                f"{taken}"
-            ),
-            user_prompt=sample_for_title(content),
-        )
-        return suggested
-
-    async def _insert_library(
-        self,
-        *,
-        org_id: str,
-        project_id: str,
-        role_id: str,
         name: str,
         content: str,
-        allow_suffix: bool,
-        taken: set[str],
+        description: str = "",
     ) -> LibraryFile:
+        """Store one document. A duplicate title in this scope is rejected."""
         store = await self._library_store()
-        title = name
-        for _ in range(20):
-            try:
-                return await store.create(
-                    org_id=org_id,
-                    project_id=project_id,
-                    role_id=role_id,
-                    file_id=str(uuid4()),
-                    name=title,
-                    content=content,
-                )
-            except LibraryNameExistsError:
-                if not allow_suffix:
-                    raise
-                taken.add(title)
-                title = choose_available_name(title, taken)
-        raise LibraryNameExistsError(title)
+        return await store.create(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            file_id=str(uuid4()),
+            name=name,
+            content=content,
+            description=description,
+        )
 
     async def update_library_content(
         self,

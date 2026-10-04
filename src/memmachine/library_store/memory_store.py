@@ -1,6 +1,7 @@
 """In-memory library used by unit tests."""
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from memmachine.common.errors import LibraryNameExistsError, ResourceNotFoundError
@@ -41,12 +42,15 @@ class InMemoryLibraryStore(LibraryStore):
         file_id: str,
         name: str,
         content: str,
+        description: str = "",
     ) -> LibraryFile:
         now = datetime.now(UTC)
         file = LibraryFile(
             id=file_id,
             name=name,
             content=content,
+            description=description,
+            always_loaded=False,
             created_at=now,
             updated_at=now,
         )
@@ -69,11 +73,9 @@ class InMemoryLibraryStore(LibraryStore):
             if key is None:
                 raise ResourceNotFoundError(f"Library file '{file_id}' not found")
             current = self._files[key]
-            updated = LibraryFile(
-                id=current.id,
-                name=current.name,
+            updated = replace(
+                current,
                 content=content,
-                created_at=current.created_at,
                 updated_at=datetime.now(UTC),
             )
             self._files[key] = updated
@@ -95,11 +97,9 @@ class InMemoryLibraryStore(LibraryStore):
             current = self._files[key]
             if current.name != name:
                 self._reject_taken_name(org_id, project_id, role_id, name, file_id)
-            updated = LibraryFile(
-                id=current.id,
+            updated = replace(
+                current,
                 name=name,
-                content=current.content,
-                created_at=current.created_at,
                 updated_at=datetime.now(UTC),
             )
             self._files[key] = updated

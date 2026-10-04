@@ -69,13 +69,6 @@ class SemanticMemoryConf(YamlSerializableMixin):
         ...,
         description="The default language model to use for semantic memory",
     )
-    library_title_model: str = Field(
-        default="",
-        description=(
-            "Language model id for library titles only. Empty calls gpt-4o-mini "
-            "with llm_model's credentials and does not change that model."
-        ),
-    )
     embedding_model: str = Field(
         ...,
         description="The embedding model to use for semantic memory",

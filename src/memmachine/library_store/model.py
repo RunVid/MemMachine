@@ -11,6 +11,8 @@ class LibraryFile:
     id: str
     name: str
     content: str
+    description: str
+    always_loaded: bool
     created_at: datetime
     updated_at: datetime
 

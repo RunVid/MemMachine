@@ -97,16 +97,17 @@ Write the call here. `POST /api/v2/memories` would run extraction and can put th
 
 Use this for a document the user files. `role_id` is `library`. MemMachine assigns an `id` at create time. The title is a display name and is unique for that project and role. Read, replace the body, rename, and delete all use the `id`.
 
-The body is stored as written, including Markdown. It is plain text. The maximum length is 40000 characters. It is not extracted and it is not searchable. The file appears in the list after the write finishes.
+The body is stored as written, including Markdown. It is plain text. The maximum length is 40000 characters. It is not extracted and it is not searchable.
 
-Omit `name` to have MemMachine choose a title from the start, middle, and end of the body, plus any Markdown headings, while avoiding titles already in this scope. A generated title that collides gets a numeric suffix. A title the client sends does not get a suffix: if that title already exists, the request returns 409 and nothing is written.
+**Create requires `name`.** Send the title the user chose. Titles are unique for that project and role. If the same title already exists, create returns **409** and nothing is written. MemMachine does not rename files or add numeric suffixes.
 
-`timeout` is a number of seconds. It covers waiting for a title-generation slot and the model call. If it expires, the response is 408 and the file is not stored. The client's HTTP wait must be longer than `timeout`. MemMachine stays one process for this. At most twenty titles are generated at once on that process. By default the call uses `gpt-4o-mini` with the same API credentials as `llm_model`, and does not change the extraction model. Set `semantic_memory.library_title_model` to a language model id to choose a different one. Further creates wait in that same timeout. A request that already includes `name` does not use a slot. Replacing the body and deleting do not use `timeout`; both can be retried. Delete of a missing id succeeds.
+Optional **`description`** is a one-line summary (single line, at most 512 characters). Defaults to an empty string.
 
 ```python
 created = memory.create_library(
     content="# Service area\n\nWeekday coverage for the office and the lobby.",
-    timeout=30,
+    name="Service area",
+    description="Weekday lobby and office coverage",
     role_id="library",
 )
 memory.update_library_content(
@@ -126,13 +127,13 @@ memory.list_library(role_id="library")
 
 | Operation | Path | Success | Failure |
 |---|---|---|---|
-| Create | `POST /api/v2/memories/library` | 201, returns `id`, title, and body | Empty or over 40000 characters: 422. Title generation timed out: 408, nothing stored. Supplied title already exists: 409 |
+| Create | `POST /api/v2/memories/library` | 201, returns `id`, title, body, and description | Empty or over 40000 characters: 422. Title already exists: 409 |
 | Replace body | `POST /api/v2/memories/library/content` | 200, title unchanged | Unknown `id`: 404, no file is created |
-| Rename | `POST /api/v2/memories/library/rename` | 200, `id` unchanged | Unknown `id`: 404. Title already exists: 409, previous title kept, no suffix |
+| Rename | `POST /api/v2/memories/library/rename` | 200, `id` unchanged | Unknown `id`: 404. Title already exists: 409, previous title kept |
 | Delete | `POST /api/v2/memories/library/delete` | 204 | A missing `id` still returns 204 |
-| Read | `POST /api/v2/memories/library/get` | 200 | Unknown `id`: 404 |
+| Read | `POST /api/v2/memories/library/get` | 200, returns `name`, `content`, and `description` | Unknown `id`: 404 |
 | List | `POST /api/v2/memories/library/list` | 200 | No files: `files` is `[]` |
 
-List entries are `id`, `name`, and `updated_at`. They do not include the body.
+List entries are `id`, `name`, and `updated_at`. They do not include the body or description.
 
-The file page creates, replaces, renames, and deletes. Facts about the user still go through normal memory. The assistant lists titles at the start of a turn and calls with `id` when it needs a body.
+The file page asks for a title and optional one-line summary, then creates with that `name`. On 409, prompt for a different title. Replace, rename, and delete use the returned `id`. Facts about the user still go through normal memory. The assistant lists titles at the start of a turn and calls with `id` when it needs a body.

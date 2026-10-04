@@ -1158,6 +1158,7 @@ class KvListResponse(BaseModel):
 
 LIBRARY_NAME_MAX_LENGTH = 256
 LIBRARY_CONTENT_MAX_LENGTH = 40000
+LIBRARY_DESCRIPTION_MAX_LENGTH = 512
 
 
 def _library_name(value: str) -> str:
@@ -1167,6 +1168,16 @@ def _library_name(value: str) -> str:
     if len(name) > LIBRARY_NAME_MAX_LENGTH:
         raise ValueError(f"name must be at most {LIBRARY_NAME_MAX_LENGTH} characters")
     return name
+
+
+def _library_description(value: str) -> str:
+    if "\n" in value or "\r" in value:
+        raise ValueError("description must be a single line")
+    if len(value) > LIBRARY_DESCRIPTION_MAX_LENGTH:
+        raise ValueError(
+            f"description must be at most {LIBRARY_DESCRIPTION_MAX_LENGTH} characters"
+        )
+    return value
 
 
 def _library_content(value: str) -> str:
@@ -1188,13 +1199,17 @@ def _library_id(value: str) -> str:
 
 
 class CreateLibrarySpec(_WithOrgAndProj):
-    """Store one document. A missing title is generated before the write."""
+    """Store one document with a client-chosen title."""
 
     role_id: Annotated[
         SafeId,
         Field(
             ..., description=SpecDoc.LIBRARY_ROLE_ID, examples=Examples.LIBRARY_ROLE_ID
         ),
+    ]
+    name: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_NAME, examples=Examples.LIBRARY_NAME),
     ]
     content: Annotated[
         str,
@@ -1204,39 +1219,29 @@ class CreateLibrarySpec(_WithOrgAndProj):
             examples=Examples.LIBRARY_CONTENT,
         ),
     ]
-    name: Annotated[
-        str | None,
+    description: Annotated[
+        str,
         Field(
-            default=None,
-            description=SpecDoc.LIBRARY_NAME,
-            examples=Examples.LIBRARY_NAME,
+            default="",
+            description=SpecDoc.LIBRARY_DESCRIPTION,
+            examples=Examples.LIBRARY_DESCRIPTION,
         ),
-    ] = None
-    timeout: Annotated[
-        float,
-        Field(
-            ..., description=SpecDoc.LIBRARY_TIMEOUT, examples=Examples.LIBRARY_TIMEOUT
-        ),
-    ]
+    ] = ""
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        return _library_description(value)
 
     @field_validator("name")
     @classmethod
-    def validate_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
+    def validate_name(cls, value: str) -> str:
         return _library_name(value)
 
     @field_validator("content")
     @classmethod
     def validate_content(cls, value: str) -> str:
         return _library_content(value)
-
-    @field_validator("timeout")
-    @classmethod
-    def validate_timeout(cls, value: float) -> float:
-        if value <= 0:
-            raise ValueError("timeout must be greater than 0")
-        return value
 
 
 class _LibraryIdSpec(_WithOrgAndProj):
@@ -1312,6 +1317,14 @@ class LibraryFileResponse(BaseModel):
     id: Annotated[str, Field(..., description=SpecDoc.LIBRARY_ID)]
     name: Annotated[str, Field(..., description=SpecDoc.LIBRARY_NAME)]
     content: Annotated[str, Field(..., description=SpecDoc.LIBRARY_CONTENT)]
+    description: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_DESCRIPTION),
+    ]
+    always_loaded: Annotated[
+        bool,
+        Field(..., description=SpecDoc.LIBRARY_ALWAYS_LOADED),
+    ]
     created_at: Annotated[
         AwareDatetime,
         Field(..., description=SpecDoc.LIBRARY_CREATED_AT),

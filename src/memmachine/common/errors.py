@@ -117,6 +117,16 @@ class LibraryNameExistsError(MemMachineError):
         super().__init__(f"Library file '{name}' already exists")
 
 
+class LibraryTimeoutError(MemMachineError):
+    """Title generation did not finish in time, so nothing was stored."""
+
+    def __init__(self) -> None:
+        """Initialize the timeout error."""
+        super().__init__(
+            "Library title generation timed out before the file was stored"
+        )
+
+
 class EpisodicMemoryManagerClosedError(MemMachineError):
     """Exception raised when operating on a closed EpisodicMemory instance."""
 

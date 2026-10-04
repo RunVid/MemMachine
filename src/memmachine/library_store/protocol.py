@@ -6,7 +6,7 @@ from memmachine.library_store.model import LibraryFile, LibraryName
 
 
 class LibraryStore(Protocol):
-    """Store one document per file name."""
+    """Store one document per id. The title is unique inside one role."""
 
     async def startup(self) -> None:
         """Create tables when the database does not already have them."""
@@ -17,22 +17,33 @@ class LibraryStore(Protocol):
         org_id: str,
         project_id: str,
         role_id: str,
+        file_id: str,
         name: str,
         content: str,
     ) -> LibraryFile:
-        """Create a file. The same name in this scope must not already exist."""
+        """Insert a finished document. The title must be free in this scope."""
 
-    async def update(
+    async def update_content(
         self,
         *,
         org_id: str,
         project_id: str,
         role_id: str,
-        name: str,
+        file_id: str,
         content: str,
-        new_name: str | None = None,
     ) -> LibraryFile:
-        """Replace the body of an existing file, and its name when requested."""
+        """Replace the body. The title stays the same."""
+
+    async def rename(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        file_id: str,
+        name: str,
+    ) -> LibraryFile:
+        """Replace the title. A taken title is left unchanged."""
 
     async def get(
         self,
@@ -40,7 +51,7 @@ class LibraryStore(Protocol):
         org_id: str,
         project_id: str,
         role_id: str,
-        name: str,
+        file_id: str,
     ) -> LibraryFile:
         """Return one file."""
 
@@ -50,9 +61,9 @@ class LibraryStore(Protocol):
         org_id: str,
         project_id: str,
         role_id: str,
-        name: str,
+        file_id: str,
     ) -> None:
-        """Delete one file."""
+        """Delete one file. A missing id is already gone."""
 
     async def list_names(
         self,
@@ -61,7 +72,7 @@ class LibraryStore(Protocol):
         project_id: str,
         role_id: str,
     ) -> list[LibraryName]:
-        """Return file names and update times, newest first."""
+        """Return ids, titles, and update times, newest first."""
 
     async def delete_project(self, *, org_id: str, project_id: str) -> None:
         """Delete every library file in one project."""

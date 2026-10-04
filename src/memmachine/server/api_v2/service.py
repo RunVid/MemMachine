@@ -14,26 +14,27 @@ from memmachine.common.api.spec import (
     AddMemoryResult,
     AppendKvSpec,
     ConsolidateMemoriesResponse,
+    CreateLibrarySpec,
     Episode,
     EpisodicSearchResult,
     GetKvSpec,
     KvListResponse,
     KvRecord,
     LibraryFileResponse,
-    LibraryFileSpec,
+    LibraryIdSpec,
     LibraryListResponse,
     LibraryNameResponse,
-    LibraryNameSpec,
     ListLibrarySpec,
     ListMemoriesSpec,
     ListResult,
     ListResultContent,
+    RenameLibrarySpec,
     SearchMemoriesSpec,
     SearchResult,
     SearchResultContent,
     SemanticFeature,
     SemanticIsolation,
-    UpdateLibrarySpec,
+    UpdateLibraryContentSpec,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
 )
@@ -473,6 +474,7 @@ async def _get_kv(spec: GetKvSpec, memmachine: MemMachine) -> KvListResponse:
 
 def _library_file(file: LibraryFile) -> LibraryFileResponse:
     return LibraryFileResponse(
+        id=file.id,
         name=file.name,
         content=file.content,
         created_at=file.created_at,
@@ -481,57 +483,71 @@ def _library_file(file: LibraryFile) -> LibraryFileResponse:
 
 
 def _library_name(item: LibraryName) -> LibraryNameResponse:
-    return LibraryNameResponse(name=item.name, updated_at=item.updated_at)
+    return LibraryNameResponse(id=item.id, name=item.name, updated_at=item.updated_at)
 
 
 async def _create_library(
-    spec: LibraryFileSpec,
+    spec: CreateLibrarySpec,
     memmachine: MemMachine,
 ) -> LibraryFileResponse:
     file = await memmachine.create_library(
         org_id=spec.org_id,
         project_id=spec.project_id,
         role_id=spec.role_id,
+        content=spec.content,
+        seconds=spec.timeout,
         name=spec.name,
+    )
+    return _library_file(file)
+
+
+async def _update_library_content(
+    spec: UpdateLibraryContentSpec,
+    memmachine: MemMachine,
+) -> LibraryFileResponse:
+    file = await memmachine.update_library_content(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        role_id=spec.role_id,
+        file_id=spec.id,
         content=spec.content,
     )
     return _library_file(file)
 
 
-async def _update_library(
-    spec: UpdateLibrarySpec,
+async def _rename_library(
+    spec: RenameLibrarySpec,
     memmachine: MemMachine,
 ) -> LibraryFileResponse:
-    file = await memmachine.update_library(
+    file = await memmachine.rename_library(
         org_id=spec.org_id,
         project_id=spec.project_id,
         role_id=spec.role_id,
+        file_id=spec.id,
         name=spec.name,
-        content=spec.content,
-        new_name=spec.new_name,
     )
     return _library_file(file)
 
 
 async def _get_library(
-    spec: LibraryNameSpec,
+    spec: LibraryIdSpec,
     memmachine: MemMachine,
 ) -> LibraryFileResponse:
     file = await memmachine.get_library(
         org_id=spec.org_id,
         project_id=spec.project_id,
         role_id=spec.role_id,
-        name=spec.name,
+        file_id=spec.id,
     )
     return _library_file(file)
 
 
-async def _delete_library(spec: LibraryNameSpec, memmachine: MemMachine) -> None:
+async def _delete_library(spec: LibraryIdSpec, memmachine: MemMachine) -> None:
     await memmachine.delete_library(
         org_id=spec.org_id,
         project_id=spec.project_id,
         role_id=spec.role_id,
-        name=spec.name,
+        file_id=spec.id,
     )
 
 

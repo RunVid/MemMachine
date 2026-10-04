@@ -16,6 +16,7 @@ from memmachine.common.api.spec import (
     AppendKvSpec,
     ConsolidateMemoriesResponse,
     ConsolidateMemoriesSpec,
+    CreateLibrarySpec,
     CreateProjectSpec,
     DeleteEpisodicMemorySpec,
     DeleteProjectSpec,
@@ -27,18 +28,18 @@ from memmachine.common.api.spec import (
     KvListResponse,
     KvRecord,
     LibraryFileResponse,
-    LibraryFileSpec,
+    LibraryIdSpec,
     LibraryListResponse,
-    LibraryNameSpec,
     ListLibrarySpec,
     ListMemoriesSpec,
     ListResult,
     ProjectConfig,
     ProjectResponse,
+    RenameLibrarySpec,
     RestErrorModel,
     SearchMemoriesSpec,
     SearchResult,
-    UpdateLibrarySpec,
+    UpdateLibraryContentSpec,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
 )
@@ -51,6 +52,7 @@ from memmachine.common.errors import (
     ConfigurationError,
     InvalidArgumentError,
     LibraryNameExistsError,
+    LibraryTimeoutError,
     ResourceNotFoundError,
     SessionAlreadyExistsError,
     SessionNotFoundError,
@@ -66,9 +68,10 @@ from memmachine.server.api_v2.service import (
     _get_library,
     _list_library,
     _list_target_memories,
+    _rename_library,
     _search_target_memories,
     _SessionData,
-    _update_library,
+    _update_library_content,
     _write_semantic_memory,
     get_memmachine,
 )
@@ -458,6 +461,8 @@ async def get_kv(
 
 
 def _library_error(error: Exception, *, action: str) -> RestError:
+    if isinstance(error, LibraryTimeoutError):
+        return RestError(code=408, message=str(error), ex=error)
     if isinstance(error, LibraryNameExistsError):
         return RestError(code=409, message=str(error), ex=error)
     if isinstance(error, ResourceNotFoundError):
@@ -473,26 +478,41 @@ def _library_error(error: Exception, *, action: str) -> RestError:
     description=RouterDoc.CREATE_LIBRARY,
 )
 async def create_library(
-    spec: LibraryFileSpec,
+    spec: CreateLibrarySpec,
     memmachine: Annotated[MemMachine, Depends(get_memmachine)],
 ) -> LibraryFileResponse:
-    """Create a named document that is not extracted into semantic memory."""
+    """Store one document after its title is ready."""
     try:
         return await _create_library(spec=spec, memmachine=memmachine)
     except Exception as e:
         raise _library_error(e, action="create library file") from e
 
 
-@router.post("/memories/library/update", description=RouterDoc.UPDATE_LIBRARY)
-async def update_library(
-    spec: UpdateLibrarySpec,
+@router.post(
+    "/memories/library/content",
+    description=RouterDoc.UPDATE_LIBRARY_CONTENT,
+)
+async def update_library_content(
+    spec: UpdateLibraryContentSpec,
     memmachine: Annotated[MemMachine, Depends(get_memmachine)],
 ) -> LibraryFileResponse:
-    """Replace the body of an existing library file, and its name when requested."""
+    """Replace the body of one library file."""
     try:
-        return await _update_library(spec=spec, memmachine=memmachine)
+        return await _update_library_content(spec=spec, memmachine=memmachine)
     except Exception as e:
         raise _library_error(e, action="update library file") from e
+
+
+@router.post("/memories/library/rename", description=RouterDoc.RENAME_LIBRARY)
+async def rename_library(
+    spec: RenameLibrarySpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> LibraryFileResponse:
+    """Replace the display name. The id stays the same."""
+    try:
+        return await _rename_library(spec=spec, memmachine=memmachine)
+    except Exception as e:
+        raise _library_error(e, action="rename library file") from e
 
 
 @router.post(
@@ -501,10 +521,10 @@ async def update_library(
     description=RouterDoc.DELETE_LIBRARY,
 )
 async def delete_library(
-    spec: LibraryNameSpec,
+    spec: LibraryIdSpec,
     memmachine: Annotated[MemMachine, Depends(get_memmachine)],
 ) -> None:
-    """Delete one library file by name."""
+    """Delete one library file by id."""
     try:
         await _delete_library(spec=spec, memmachine=memmachine)
     except Exception as e:
@@ -513,10 +533,10 @@ async def delete_library(
 
 @router.post("/memories/library/get", description=RouterDoc.GET_LIBRARY)
 async def get_library(
-    spec: LibraryNameSpec,
+    spec: LibraryIdSpec,
     memmachine: Annotated[MemMachine, Depends(get_memmachine)],
 ) -> LibraryFileResponse:
-    """Read one library file by name."""
+    """Read one library file by id."""
     try:
         return await _get_library(spec=spec, memmachine=memmachine)
     except Exception as e:

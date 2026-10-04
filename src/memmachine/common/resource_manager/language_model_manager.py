@@ -57,6 +57,38 @@ class LanguageModelManager:
             self._language_models[name] = llm_model
             return llm_model
 
+    async def get_language_model_with_model(self, name: str, model: str) -> LanguageModel:
+        """
+        Return a separate client that calls ``model`` with ``name``'s credentials.
+
+        The configured client for ``name`` is left unchanged.
+        """
+        cache_key = f"{name}\n{model}"
+        if cache_key in self._language_models:
+            return self._language_models[cache_key]
+
+        if cache_key not in self._language_models_lock:
+            async with self._lock:
+                self._language_models_lock.setdefault(cache_key, Lock())
+
+        async with self._language_models_lock[cache_key]:
+            if cache_key in self._language_models:
+                return self._language_models[cache_key]
+
+            if name in self.conf.openai_responses_language_model_confs:
+                built = self._build_openai_responses_language_model(name, model=model)
+            elif name in self.conf.openai_chat_completions_language_model_confs:
+                built = self._build_openai_chat_completions_language_model(
+                    name, model=model
+                )
+            else:
+                raise InvalidLanguageModelError(
+                    f"Library titles default to {model} and need an OpenAI model "
+                    f"named '{name}'."
+                )
+            self._language_models[cache_key] = built
+            return built
+
     @staticmethod
     async def _validate_language_model(
         name: str, language_model: LanguageModel
@@ -93,7 +125,9 @@ class LanguageModelManager:
             await self._validate_language_model(name, ret)
         return ret
 
-    def _build_openai_responses_language_model(self, name: str) -> LanguageModel:
+    def _build_openai_responses_language_model(
+        self, name: str, *, model: str | None = None
+    ) -> LanguageModel:
         import openai
 
         from memmachine.common.language_model.openai_responses_language_model import (
@@ -109,14 +143,16 @@ class LanguageModelManager:
                     api_key=conf.api_key.get_secret_value(),
                     base_url=conf.base_url,
                 ),
-                model=conf.model,
+                model=model or conf.model,
                 max_retry_interval_seconds=conf.max_retry_interval_seconds,
                 metrics_factory=conf.get_metrics_factory(),
                 user_metrics_labels=conf.user_metrics_labels,
             ),
         )
 
-    def _build_openai_chat_completions_language_model(self, name: str) -> LanguageModel:
+    def _build_openai_chat_completions_language_model(
+        self, name: str, *, model: str | None = None
+    ) -> LanguageModel:
         import openai
 
         from memmachine.common.language_model.openai_chat_completions_language_model import (
@@ -132,7 +168,7 @@ class LanguageModelManager:
                     api_key=conf.api_key.get_secret_value(),
                     base_url=conf.base_url,
                 ),
-                model=conf.model,
+                model=model or conf.model,
                 max_retry_interval_seconds=conf.max_retry_interval_seconds,
                 metrics_factory=conf.get_metrics_factory(),
                 user_metrics_labels=conf.user_metrics_labels,

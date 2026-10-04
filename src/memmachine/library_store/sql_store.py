@@ -25,6 +25,7 @@ metadata = MetaData()
 library_entry_table = Table(
     "library_entry",
     metadata,
+    Column("id", String, primary_key=True),
     Column("org_id", String, nullable=False),
     Column("project_id", String, nullable=False),
     Column("role_id", String, nullable=False),
@@ -45,6 +46,7 @@ library_entry_table = Table(
 def _file_from_mapping(mapping: object) -> LibraryFile:
     row = dict(mapping)  # type: ignore[call-overload]
     return LibraryFile(
+        id=str(row["id"]),
         name=str(row["name"]),
         content=str(row["content"]),
         created_at=row["created_at"],
@@ -52,12 +54,12 @@ def _file_from_mapping(mapping: object) -> LibraryFile:
     )
 
 
-def _missing(name: str) -> ResourceNotFoundError:
-    return ResourceNotFoundError(f"Library file '{name}' not found")
+def _missing(file_id: str) -> ResourceNotFoundError:
+    return ResourceNotFoundError(f"Library file '{file_id}' not found")
 
 
 class SqlLibraryStore:
-    """One document per name in the ``library_entry`` table."""
+    """One document per id in the ``library_entry`` table."""
 
     def __init__(self, engine: AsyncEngine) -> None:
         """Bind the store to the semantic memory SQL engine."""
@@ -70,19 +72,19 @@ class SqlLibraryStore:
     def _session(self) -> AsyncSession:
         return self._session_factory()
 
-    def _scope(
+    def _by_id(
         self,
         org_id: str,
         project_id: str,
         role_id: str,
-        name: str,
+        file_id: str,
     ) -> ColumnElement[bool]:
         table = library_entry_table.c
         return (
             (table.org_id == org_id)
             & (table.project_id == project_id)
             & (table.role_id == role_id)
-            & (table.name == name)
+            & (table.id == file_id)
         )
 
     async def startup(self) -> None:
@@ -95,11 +97,13 @@ class SqlLibraryStore:
         org_id: str,
         project_id: str,
         role_id: str,
+        file_id: str,
         name: str,
         content: str,
     ) -> LibraryFile:
         now = datetime.now(UTC)
         stmt = library_entry_table.insert().values(
+            id=file_id,
             org_id=org_id,
             project_id=project_id,
             role_id=role_id,
@@ -116,47 +120,71 @@ class SqlLibraryStore:
                 await session.rollback()
                 raise LibraryNameExistsError(name) from error
         return LibraryFile(
+            id=file_id,
             name=name,
             content=content,
             created_at=now,
             updated_at=now,
         )
 
-    async def update(
+    async def update_content(
         self,
         *,
         org_id: str,
         project_id: str,
         role_id: str,
-        name: str,
+        file_id: str,
         content: str,
-        new_name: str | None = None,
     ) -> LibraryFile:
-        target = name if new_name is None or new_name == name else new_name
         now = datetime.now(UTC)
-        values: dict[str, object] = {"content": content, "updated_at": now}
-        if target != name:
-            values["name"] = target
         stmt = (
             update(library_entry_table)
-            .where(self._scope(org_id, project_id, role_id, name))
-            .values(**values)
+            .where(self._by_id(org_id, project_id, role_id, file_id))
+            .values(content=content, updated_at=now)
+        )
+        async with self._session() as session:
+            result = await session.execute(stmt)
+            if result.rowcount == 0:
+                await session.rollback()
+                raise _missing(file_id)
+            await session.commit()
+        return await self.get(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            file_id=file_id,
+        )
+
+    async def rename(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        file_id: str,
+        name: str,
+    ) -> LibraryFile:
+        now = datetime.now(UTC)
+        stmt = (
+            update(library_entry_table)
+            .where(self._by_id(org_id, project_id, role_id, file_id))
+            .values(name=name, updated_at=now)
         )
         async with self._session() as session:
             try:
                 result = await session.execute(stmt)
                 if result.rowcount == 0:
                     await session.rollback()
-                    raise _missing(name)
+                    raise _missing(file_id)
                 await session.commit()
             except IntegrityError as error:
                 await session.rollback()
-                raise LibraryNameExistsError(target) from error
+                raise LibraryNameExistsError(name) from error
         return await self.get(
             org_id=org_id,
             project_id=project_id,
             role_id=role_id,
-            name=target,
+            file_id=file_id,
         )
 
     async def get(
@@ -165,15 +193,15 @@ class SqlLibraryStore:
         org_id: str,
         project_id: str,
         role_id: str,
-        name: str,
+        file_id: str,
     ) -> LibraryFile:
         stmt = select(library_entry_table).where(
-            self._scope(org_id, project_id, role_id, name)
+            self._by_id(org_id, project_id, role_id, file_id)
         )
         async with self._session() as session:
             row = (await session.execute(stmt)).mappings().first()
         if row is None:
-            raise _missing(name)
+            raise _missing(file_id)
         return _file_from_mapping(row)
 
     async def delete(
@@ -182,16 +210,13 @@ class SqlLibraryStore:
         org_id: str,
         project_id: str,
         role_id: str,
-        name: str,
+        file_id: str,
     ) -> None:
         stmt = delete(library_entry_table).where(
-            self._scope(org_id, project_id, role_id, name)
+            self._by_id(org_id, project_id, role_id, file_id)
         )
         async with self._session() as session:
-            result = await session.execute(stmt)
-            if result.rowcount == 0:
-                await session.rollback()
-                raise _missing(name)
+            await session.execute(stmt)
             await session.commit()
 
     async def list_names(
@@ -203,7 +228,7 @@ class SqlLibraryStore:
     ) -> list[LibraryName]:
         table = library_entry_table.c
         stmt = (
-            select(table.name, table.updated_at)
+            select(table.id, table.name, table.updated_at)
             .where(
                 (table.org_id == org_id)
                 & (table.project_id == project_id)
@@ -214,7 +239,11 @@ class SqlLibraryStore:
         async with self._session() as session:
             rows = (await session.execute(stmt)).mappings().all()
         return [
-            LibraryName(name=str(row["name"]), updated_at=row["updated_at"])
+            LibraryName(
+                id=str(row["id"]),
+                name=str(row["name"]),
+                updated_at=row["updated_at"],
+            )
             for row in rows
         ]
 

@@ -6,8 +6,9 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class LibraryFile:
-    """One named document."""
+    """One document. ``id`` stays fixed when the title changes."""
 
+    id: str
     name: str
     content: str
     created_at: datetime
@@ -16,7 +17,8 @@ class LibraryFile:
 
 @dataclass(frozen=True)
 class LibraryName:
-    """A file name without its body."""
+    """A file id and title, without the body."""
 
+    id: str
     name: str
     updated_at: datetime

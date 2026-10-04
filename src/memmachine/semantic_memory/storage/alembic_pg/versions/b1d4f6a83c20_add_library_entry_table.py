@@ -22,6 +22,7 @@ def upgrade() -> None:
     """Store named documents outside semantic features."""
     op.create_table(
         "library_entry",
+        sa.Column("id", sa.String(), nullable=False),
         sa.Column("org_id", sa.String(), nullable=False),
         sa.Column("project_id", sa.String(), nullable=False),
         sa.Column("role_id", sa.String(), nullable=False),
@@ -29,6 +30,7 @@ def upgrade() -> None:
         sa.Column("content", sa.String(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "org_id",
             "project_id",

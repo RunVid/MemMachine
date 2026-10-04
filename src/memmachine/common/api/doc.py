@@ -153,14 +153,17 @@ class SpecDoc:
     Role identifier that owns these files. Files for one role are not visible
     to another role in the same project."""
 
-    LIBRARY_NAME = """
-    File name. Unique for this project and role. Creating the same name again
-    is rejected."""
+    LIBRARY_ID = """
+    Stable identifier assigned when the file is created. It does not change
+    when the title changes."""
 
-    LIBRARY_NEW_NAME = """
-    Replacement file name. Omit it to keep the current name. The new name must
-    be unique for this project and role. A name that already exists is rejected
-    and the existing file is left unchanged."""
+    LIBRARY_NAME = """
+    Display title. Unique for this project and role. Omit it on create to
+    generate one from the body. Markdown is stored as plain text."""
+
+    LIBRARY_TIMEOUT = """
+    Seconds allowed to finish choosing a title. If this expires, nothing is
+    stored."""
 
     LIBRARY_CONTENT = """
     Document body, stored as written. It is not extracted into profile or
@@ -173,7 +176,7 @@ class SpecDoc:
     UTC time when this file's body was last replaced."""
 
     LIBRARY_FILES = """
-    File names and update times. Bodies are omitted."""
+    File ids, titles, and update times. Bodies are omitted."""
 
     SEMANTIC_METADATA_OTHER = "Additional storage metadata for the semantic feature."
 
@@ -394,8 +397,9 @@ class Examples:
     ]
     KV_LIMIT: ClassVar[list[int]] = [5]
     LIBRARY_ROLE_ID: ClassVar[list[str]] = ["library"]
+    LIBRARY_ID: ClassVar[list[str]] = ["8d0c1a2e-4b3f-4e1a-9c2d-6f7a8b9c0d1e"]
     LIBRARY_NAME: ClassVar[list[str]] = ["服务范围"]
-    LIBRARY_NEW_NAME: ClassVar[list[str]] = ["营业时间"]
+    LIBRARY_TIMEOUT: ClassVar[list[float]] = [30]
     LIBRARY_CONTENT: ClassVar[list[str]] = [
         "Weekday service covers the office floors and the lobby.",
     ]
@@ -595,41 +599,52 @@ class RouterDoc:
     """
 
     CREATE_LIBRARY = """
-    Create a named document for one role.
+    Store one document for one role.
 
-    Required fields: `role_id`, `name`, and `content`. The name must be unique
-    for this project and role. A duplicate name is rejected and the existing
-    file is left unchanged. The body is stored as written and is not extracted
-    into episodic or semantic memory.
+    Required fields: `role_id`, `content`, and `timeout`. `name` is optional.
+    When `name` is omitted, a title is chosen from a short sample of the body
+    and the titles already in this scope, then the file is written. At most
+    twenty titles are generated at once on the single server process.
+    By default the call uses gpt-4o-mini and leaves the semantic extraction
+    model unchanged. Set `library_title_model` to choose another model id.
+    Waiting for a free slot counts toward
+    `timeout`. The file appears in the list only after that write. If
+    `timeout` expires first, nothing is stored. Markdown is kept as plain
+    text and is not extracted into episodic or semantic memory.
     """
 
-    UPDATE_LIBRARY = """
-    Replace the body of an existing library file, and optionally its name.
+    UPDATE_LIBRARY_CONTENT = """
+    Replace the body of one library file.
 
-    `name` selects the existing file. `new_name` renames it when present.
-    If the file does not exist, the request is rejected and no file is created.
-    If `new_name` is already used in this project and role, the request is
-    rejected and the existing file is left unchanged.
+    `id` selects the file. The title is not changed. If the id does not exist,
+    the request is rejected and no file is created.
+    """
+
+    RENAME_LIBRARY = """
+    Replace the display name of one library file.
+
+    The id stays the same. If the new name is already used in this project and
+    role, the request is rejected and the current title is left unchanged.
     """
 
     DELETE_LIBRARY = """
-    Delete one library file by name.
+    Delete one library file by id.
 
-    If the file does not exist, a not-found error is returned.
+    Deleting an id that is already gone succeeds.
     """
 
     GET_LIBRARY = """
-    Read one library file by name.
+    Read one library file by id.
 
-    This is an exact name lookup, not a semantic search. If the file does not
-    exist, a not-found error is returned.
+    This is an id lookup, not a semantic search. If the id does not exist,
+    a not-found error is returned.
     """
 
     LIST_LIBRARY = """
-    List library file names for one role.
+    List library files for one role.
 
-    Response entries contain the name and last update time. Document bodies
-    are omitted. An empty list is returned when the role has no files.
+    Response entries contain the id, title, and last update time. Document
+    bodies are omitted. An empty list is returned when the role has no files.
     """
 
     DELETE_SEMANTIC_MEMORY = """

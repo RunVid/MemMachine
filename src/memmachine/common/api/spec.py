@@ -11,6 +11,7 @@ except ImportError:
     UTC = timezone.utc
 
 from typing import Annotated, Any
+from uuid import UUID
 
 # Python 3.11+ has Self in typing, Python 3.10 uses typing_extensions
 try:
@@ -1178,18 +1179,22 @@ def _library_content(value: str) -> str:
     return value
 
 
-class LibraryFileSpec(_WithOrgAndProj):
-    """Create or replace one named document. The body is stored as written."""
+def _library_id(value: str) -> str:
+    text = value.strip()
+    try:
+        return str(UUID(text))
+    except ValueError as error:
+        raise ValueError("id must be a UUID") from error
+
+
+class CreateLibrarySpec(_WithOrgAndProj):
+    """Store one document. A missing title is generated before the write."""
 
     role_id: Annotated[
         SafeId,
         Field(
             ..., description=SpecDoc.LIBRARY_ROLE_ID, examples=Examples.LIBRARY_ROLE_ID
         ),
-    ]
-    name: Annotated[
-        str,
-        Field(..., description=SpecDoc.LIBRARY_NAME, examples=Examples.LIBRARY_NAME),
     ]
     content: Annotated[
         str,
@@ -1199,10 +1204,26 @@ class LibraryFileSpec(_WithOrgAndProj):
             examples=Examples.LIBRARY_CONTENT,
         ),
     ]
+    name: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description=SpecDoc.LIBRARY_NAME,
+            examples=Examples.LIBRARY_NAME,
+        ),
+    ] = None
+    timeout: Annotated[
+        float,
+        Field(
+            ..., description=SpecDoc.LIBRARY_TIMEOUT, examples=Examples.LIBRARY_TIMEOUT
+        ),
+    ]
 
     @field_validator("name")
     @classmethod
-    def validate_name(cls, value: str) -> str:
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return _library_name(value)
 
     @field_validator("content")
@@ -1210,29 +1231,16 @@ class LibraryFileSpec(_WithOrgAndProj):
     def validate_content(cls, value: str) -> str:
         return _library_content(value)
 
-
-class UpdateLibrarySpec(LibraryFileSpec):
-    """Replace a library file body and, when ``new_name`` is set, its name."""
-
-    new_name: Annotated[
-        str | None,
-        Field(
-            default=None,
-            description=SpecDoc.LIBRARY_NEW_NAME,
-            examples=Examples.LIBRARY_NEW_NAME,
-        ),
-    ] = None
-
-    @field_validator("new_name")
+    @field_validator("timeout")
     @classmethod
-    def validate_new_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return _library_name(value)
+    def validate_timeout(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("timeout must be greater than 0")
+        return value
 
 
-class LibraryNameSpec(_WithOrgAndProj):
-    """Identify one library file by name."""
+class _LibraryIdSpec(_WithOrgAndProj):
+    """Scope plus the stable file id."""
 
     role_id: Annotated[
         SafeId,
@@ -1240,6 +1248,38 @@ class LibraryNameSpec(_WithOrgAndProj):
             ..., description=SpecDoc.LIBRARY_ROLE_ID, examples=Examples.LIBRARY_ROLE_ID
         ),
     ]
+    id: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_ID, examples=Examples.LIBRARY_ID),
+    ]
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, value: str) -> str:
+        return _library_id(value)
+
+
+class UpdateLibraryContentSpec(_LibraryIdSpec):
+    """Replace the body of one file. The title stays the same."""
+
+    content: Annotated[
+        str,
+        Field(
+            ...,
+            description=SpecDoc.LIBRARY_CONTENT,
+            examples=Examples.LIBRARY_CONTENT,
+        ),
+    ]
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        return _library_content(value)
+
+
+class RenameLibrarySpec(_LibraryIdSpec):
+    """Replace the display name. The id stays the same."""
+
     name: Annotated[
         str,
         Field(..., description=SpecDoc.LIBRARY_NAME, examples=Examples.LIBRARY_NAME),
@@ -1251,8 +1291,12 @@ class LibraryNameSpec(_WithOrgAndProj):
         return _library_name(value)
 
 
+class LibraryIdSpec(_LibraryIdSpec):
+    """Identify one library file by id."""
+
+
 class ListLibrarySpec(_WithOrgAndProj):
-    """List file names for one role."""
+    """List file ids and titles for one role."""
 
     role_id: Annotated[
         SafeId,
@@ -1265,6 +1309,7 @@ class ListLibrarySpec(_WithOrgAndProj):
 class LibraryFileResponse(BaseModel):
     """One stored library document."""
 
+    id: Annotated[str, Field(..., description=SpecDoc.LIBRARY_ID)]
     name: Annotated[str, Field(..., description=SpecDoc.LIBRARY_NAME)]
     content: Annotated[str, Field(..., description=SpecDoc.LIBRARY_CONTENT)]
     created_at: Annotated[
@@ -1278,8 +1323,9 @@ class LibraryFileResponse(BaseModel):
 
 
 class LibraryNameResponse(BaseModel):
-    """A file name without its body."""
+    """A file id and title, without the body."""
 
+    id: Annotated[str, Field(..., description=SpecDoc.LIBRARY_ID)]
     name: Annotated[str, Field(..., description=SpecDoc.LIBRARY_NAME)]
     updated_at: Annotated[
         AwareDatetime,

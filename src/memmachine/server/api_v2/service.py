@@ -486,7 +486,12 @@ def _library_file(file: LibraryFile) -> LibraryFileResponse:
 
 
 def _library_name(item: LibraryName) -> LibraryNameResponse:
-    return LibraryNameResponse(id=item.id, name=item.name, updated_at=item.updated_at)
+    return LibraryNameResponse(
+        id=item.id,
+        name=item.name,
+        description=item.description,
+        updated_at=item.updated_at,
+    )
 
 
 async def _create_library(

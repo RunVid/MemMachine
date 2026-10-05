@@ -132,8 +132,8 @@ memory.list_library(role_id="library")
 | Rename | `POST /api/v2/memories/library/rename` | 200, `id` unchanged | Unknown `id`: 404. Title already exists: 409, previous title kept |
 | Delete | `POST /api/v2/memories/library/delete` | 204 | A missing `id` still returns 204 |
 | Read | `POST /api/v2/memories/library/get` | 200, returns `name`, `content`, and `description` | Unknown `id`: 404 |
-| List | `POST /api/v2/memories/library/list` | 200 | No files: `files` is `[]` |
+| List | `POST /api/v2/memories/library/list` | 200, each file has `id`, `name`, `description`, `updated_at` | No files: `files` is `[]` |
 
-List entries are `id`, `name`, and `updated_at`. They do not include the body or description.
+List entries are `id`, `name`, `description`, and `updated_at`. They do not include the body.
 
-The file page collects title, Markdown body, and one-line summary, then creates with those fields. On 409, prompt for a different title. Replace, rename, and delete use the returned `id`. Facts about the user still go through normal memory. The assistant lists titles at the start of a turn and calls with `id` when it needs a body.
+The file page collects title, Markdown body, and one-line summary, then creates with those fields. On 409, prompt for a different title. Replace, rename, and delete use the returned `id`. Facts about the user still go through normal memory. The assistant can call list once per turn to show each file's title and summary in tool text, then call get with `id` only when it needs the Markdown body.

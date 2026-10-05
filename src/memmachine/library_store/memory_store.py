@@ -142,7 +142,12 @@ class InMemoryLibraryStore(LibraryStore):
     ) -> list[LibraryName]:
         async with self._lock:
             names = [
-                LibraryName(id=file.id, name=file.name, updated_at=file.updated_at)
+                LibraryName(
+                    id=file.id,
+                    name=file.name,
+                    description=file.description,
+                    updated_at=file.updated_at,
+                )
                 for (row_org, row_project, row_role, _), file in self._files.items()
                 if row_org == org_id
                 and row_project == project_id

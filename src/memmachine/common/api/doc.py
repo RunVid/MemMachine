@@ -177,7 +177,7 @@ class SpecDoc:
     UTC time when this file's body was last replaced."""
 
     LIBRARY_FILES = """
-    File ids, titles, and update times. Bodies are omitted."""
+    File ids, titles, one-line summaries, and update times. Bodies are omitted."""
 
     SEMANTIC_METADATA_OTHER = "Additional storage metadata for the semantic feature."
 
@@ -639,8 +639,9 @@ class RouterDoc:
     LIST_LIBRARY = """
     List library files for one role.
 
-    Response entries contain the id, title, and last update time. Document
-    bodies are omitted. An empty list is returned when the role has no files.
+    Response entries contain the id, title, description, and last update time.
+    Document bodies are omitted. An empty list is returned when the role has no
+    files.
     """
 
     DELETE_SEMANTIC_MEMORY = """

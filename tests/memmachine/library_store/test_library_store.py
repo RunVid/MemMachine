@@ -157,7 +157,10 @@ async def test_memory_store_keeps_id_when_content_and_title_change():
     listed = await store.list_names(
         org_id="org", project_id="project", role_id="library"
     )
-    assert [(item.id, item.name) for item in listed] == [(file_id, "营业时间")]
+    assert len(listed) == 1
+    assert listed[0].id == file_id
+    assert listed[0].name == "营业时间"
+    assert listed[0].description == "One-line summary"
 
 
 @pytest.mark.asyncio

@@ -1339,10 +1339,14 @@ class LibraryFileResponse(BaseModel):
 
 
 class LibraryNameResponse(BaseModel):
-    """A file id and title, without the body."""
+    """A file id, title, and summary, without the body."""
 
     id: Annotated[str, Field(..., description=SpecDoc.LIBRARY_ID)]
     name: Annotated[str, Field(..., description=SpecDoc.LIBRARY_NAME)]
+    description: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_DESCRIPTION),
+    ]
     updated_at: Annotated[
         AwareDatetime,
         Field(..., description=SpecDoc.LIBRARY_UPDATED_AT),

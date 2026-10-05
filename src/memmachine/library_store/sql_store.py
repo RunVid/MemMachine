@@ -247,7 +247,7 @@ class SqlLibraryStore:
     ) -> list[LibraryName]:
         table = library_entry_table.c
         stmt = (
-            select(table.id, table.name, table.updated_at)
+            select(table.id, table.name, table.description, table.updated_at)
             .where(
                 (table.org_id == org_id)
                 & (table.project_id == project_id)
@@ -261,6 +261,7 @@ class SqlLibraryStore:
             LibraryName(
                 id=str(row["id"]),
                 name=str(row["name"]),
+                description=str(row.get("description", "") or ""),
                 updated_at=row["updated_at"],
             )
             for row in rows

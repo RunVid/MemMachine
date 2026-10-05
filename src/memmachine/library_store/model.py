@@ -19,8 +19,9 @@ class LibraryFile:
 
 @dataclass(frozen=True)
 class LibraryName:
-    """A file id and title, without the body."""
+    """A file id, title, and one-line summary, without the body."""
 
     id: str
     name: str
+    description: str
     updated_at: datetime

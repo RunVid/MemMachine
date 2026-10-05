@@ -981,7 +981,7 @@ class Memory:
         role_id: str = "",
         timeout: int | None = None,
     ) -> LibraryListResponse:
-        """List library ids and titles for one role. Bodies are omitted."""
+        """List library ids, titles, and summaries for one role. Bodies are omitted."""
         if self._client_closed:
             raise RuntimeError("Cannot list library files: client has been closed")
 

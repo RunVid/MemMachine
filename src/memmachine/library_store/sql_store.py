@@ -22,6 +22,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from memmachine.common.errors import LibraryNameExistsError, ResourceNotFoundError
 from memmachine.library_store.model import LibraryFile, LibraryName
 
+
+def _result_rowcount(result: object) -> int:
+    rowcount = getattr(result, "rowcount", 0)
+    if rowcount is None:
+        return 0
+    return int(rowcount)
+
+
 metadata = MetaData()
 
 library_entry_table = Table(
@@ -155,7 +163,7 @@ class SqlLibraryStore:
         )
         async with self._session() as session:
             result = await session.execute(stmt)
-            if result.rowcount == 0:
+            if _result_rowcount(result) == 0:
                 await session.rollback()
                 raise _missing(file_id)
             await session.commit()
@@ -184,7 +192,7 @@ class SqlLibraryStore:
         async with self._session() as session:
             try:
                 result = await session.execute(stmt)
-                if result.rowcount == 0:
+                if _result_rowcount(result) == 0:
                     await session.rollback()
                     raise _missing(file_id)
                 await session.commit()

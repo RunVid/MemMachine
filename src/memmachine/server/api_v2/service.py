@@ -14,6 +14,7 @@ from memmachine.common.api.spec import (
     AddMemoryResult,
     AppendKvSpec,
     ConsolidateMemoriesResponse,
+    ConsolidateMemoriesSpec,
     CreateLibrarySpec,
     Episode,
     EpisodicSearchResult,
@@ -330,7 +331,7 @@ async def _list_target_memories(
 
 
 async def _consolidate_memories(
-    spec: "ConsolidateMemoriesSpec",
+    spec: ConsolidateMemoriesSpec,
     memmachine: MemMachine,
 ) -> ConsolidateMemoriesResponse:
     """

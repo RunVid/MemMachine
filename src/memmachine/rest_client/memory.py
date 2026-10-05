@@ -35,6 +35,7 @@ from memmachine.common.api.spec import (
     RenameLibrarySpec,
     SearchMemoriesSpec,
     SearchResult,
+    SemanticIsolation,
     UpdateLibraryContentSpec,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
@@ -460,6 +461,9 @@ class Memory:
             page_num=page_num,
             filter=filter_str,
             type=memory_type,
+            user_id="",
+            role_id="",
+            session_id="",
         )
         v2_list_data = spec.model_dump(mode="json", exclude_none=True)
 
@@ -668,7 +672,7 @@ class Memory:
             project_id=self.__project_id,
             category=category,
             instruction=instruction,
-            isolation=isolation,
+            isolation=SemanticIsolation(isolation),
             user_id=user_id,
             role_id=role_id,
             session_id=session_id,

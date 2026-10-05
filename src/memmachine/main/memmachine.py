@@ -740,7 +740,7 @@ class MemMachine:
         role_id: str,
         name: str,
         content: str,
-        description: str = "",
+        description: str,
     ) -> LibraryFile:
         """Store one document. A duplicate title in this scope is rejected."""
         store = await self._library_store()

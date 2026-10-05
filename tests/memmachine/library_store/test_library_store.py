@@ -36,6 +36,16 @@ def test_create_spec_requires_name_and_validates_fields():
             role_id="library",
             name="服务范围",
             content="   ",
+            description="summary",
+        )
+    with pytest.raises(ValidationError):
+        CreateLibrarySpec(
+            org_id="org",
+            project_id="project",
+            role_id="library",
+            name="服务范围",
+            content="正文",
+            description="   ",
         )
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
@@ -44,6 +54,7 @@ def test_create_spec_requires_name_and_validates_fields():
             role_id="library",
             name="服务范围",
             content="x" * (LIBRARY_CONTENT_MAX_LENGTH + 1),
+            description="summary",
         )
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
@@ -85,7 +96,7 @@ async def _create(
     store: LibraryStore,
     name: str,
     content: str = "正文",
-    description: str = "",
+    description: str = "One-line summary",
 ) -> str:
     created = await store.create(
         org_id="org",

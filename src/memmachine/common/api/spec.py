@@ -1171,13 +1171,16 @@ def _library_name(value: str) -> str:
 
 
 def _library_description(value: str) -> str:
-    if "\n" in value or "\r" in value:
+    description = value.strip()
+    if not description:
+        raise ValueError("description is required")
+    if "\n" in description or "\r" in description:
         raise ValueError("description must be a single line")
-    if len(value) > LIBRARY_DESCRIPTION_MAX_LENGTH:
+    if len(description) > LIBRARY_DESCRIPTION_MAX_LENGTH:
         raise ValueError(
             f"description must be at most {LIBRARY_DESCRIPTION_MAX_LENGTH} characters"
         )
-    return value
+    return description
 
 
 def _library_content(value: str) -> str:
@@ -1222,11 +1225,11 @@ class CreateLibrarySpec(_WithOrgAndProj):
     description: Annotated[
         str,
         Field(
-            default="",
+            ...,
             description=SpecDoc.LIBRARY_DESCRIPTION,
             examples=Examples.LIBRARY_DESCRIPTION,
         ),
-    ] = ""
+    ]
 
     @field_validator("description")
     @classmethod

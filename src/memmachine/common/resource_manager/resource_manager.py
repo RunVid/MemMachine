@@ -120,10 +120,6 @@ class ResourceManagerImpl:
         """Return a language model by name."""
         return await self._model_manager.get_language_model(name, validate=validate)
 
-    async def get_language_model_with_model(self, name: str, model: str) -> LanguageModel:
-        """Return a separate client for ``model`` using ``name``'s credentials."""
-        return await self._model_manager.get_language_model_with_model(name, model)
-
     async def get_reranker(self, name: str, validate: bool = False) -> Reranker:
         """Return a reranker by name."""
         return await self._reranker_manager.get_reranker(name, validate=validate)

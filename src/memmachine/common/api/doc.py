@@ -158,16 +158,14 @@ class SpecDoc:
     when the title changes."""
 
     LIBRARY_NAME = """
-    Display title chosen by the client. Unique for this project and role.
-    Markdown is stored as plain text."""
+    Display title chosen by the client. Unique for this project and role."""
 
     LIBRARY_CONTENT = """
-    Document body, stored as written. It is not extracted into profile or
-    agent personality. At most 40000 characters."""
+    Document body, stored as written (Markdown is kept as plain text). It is
+    not extracted into profile or agent personality. At most 40000 characters."""
 
     LIBRARY_DESCRIPTION = """
-    One-line summary for the file. Single line, at most 512 characters.
-    Defaults to an empty string."""
+    Required one-line summary for the file. Single line, at most 512 characters."""
 
     LIBRARY_ALWAYS_LOADED = """
     Reserved for future use. New files are stored as false. Not used yet."""
@@ -604,8 +602,9 @@ class RouterDoc:
     CREATE_LIBRARY = """
     Store one document for one role.
 
-    Required fields: `role_id`, `name`, and `content`. Optional `description`
-    is a one-line summary. Duplicate names in the same project and role
+    Required fields: `role_id`, `name`, `content`, and `description`.
+    `content` may be Markdown pasted as plain text. Duplicate names in the same
+    project and role
     return 409 and leave existing files unchanged. Markdown is kept as plain
     text and is not extracted into episodic or semantic memory.
     """

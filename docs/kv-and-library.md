@@ -99,9 +99,9 @@ Use this for a document the user files. `role_id` is `library`. MemMachine assig
 
 The body is stored as written, including Markdown. It is plain text. The maximum length is 40000 characters. It is not extracted and it is not searchable.
 
-**Create requires `name`.** Send the title the user chose. Titles are unique for that project and role. If the same title already exists, create returns **409** and nothing is written. MemMachine does not rename files or add numeric suffixes.
+**Create requires `name`, `content`, and `description`.** Send the title, body, and one-line summary. The body may be Markdown pasted as plain text (stored as written). Titles are unique for that project and role. If the same title already exists, create returns **409** and nothing is written. MemMachine does not rename files or add numeric suffixes.
 
-Optional **`description`** is a one-line summary (single line, at most 512 characters). Defaults to an empty string.
+**`description`** is a single line, at most 512 characters.
 
 ```python
 created = memory.create_library(
@@ -127,7 +127,7 @@ memory.list_library(role_id="library")
 
 | Operation | Path | Success | Failure |
 |---|---|---|---|
-| Create | `POST /api/v2/memories/library` | 201, returns `id`, title, body, and description | Empty or over 40000 characters: 422. Title already exists: 409 |
+| Create | `POST /api/v2/memories/library` | 201, returns `id`, title, body, and description | Missing or invalid fields: 422. Title already exists: 409 |
 | Replace body | `POST /api/v2/memories/library/content` | 200, title unchanged | Unknown `id`: 404, no file is created |
 | Rename | `POST /api/v2/memories/library/rename` | 200, `id` unchanged | Unknown `id`: 404. Title already exists: 409, previous title kept |
 | Delete | `POST /api/v2/memories/library/delete` | 204 | A missing `id` still returns 204 |
@@ -136,4 +136,4 @@ memory.list_library(role_id="library")
 
 List entries are `id`, `name`, and `updated_at`. They do not include the body or description.
 
-The file page asks for a title and optional one-line summary, then creates with that `name`. On 409, prompt for a different title. Replace, rename, and delete use the returned `id`. Facts about the user still go through normal memory. The assistant lists titles at the start of a turn and calls with `id` when it needs a body.
+The file page collects title, Markdown body, and one-line summary, then creates with those fields. On 409, prompt for a different title. Replace, rename, and delete use the returned `id`. Facts about the user still go through normal memory. The assistant lists titles at the start of a turn and calls with `id` when it needs a body.

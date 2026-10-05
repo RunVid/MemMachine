@@ -838,14 +838,15 @@ class Memory:
         *,
         content: str,
         name: str,
+        description: str,
         role_id: str = "",
-        description: str = "",
         timeout: int | None = None,
     ) -> LibraryFileResponse:
         """
-        Store one document with a user-chosen title and optional one-line summary.
+        Store one document with a user-chosen title, body, and one-line summary.
 
-        Duplicate titles in the same project and role return 409.
+        Body may be Markdown. Duplicate titles in the same project and role
+        return 409.
         """
         if self._client_closed:
             raise RuntimeError("Cannot create library file: client has been closed")

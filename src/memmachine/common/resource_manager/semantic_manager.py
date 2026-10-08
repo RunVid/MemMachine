@@ -10,6 +10,8 @@ from memmachine.common.errors import InvalidArgumentError
 from memmachine.common.resource_manager import CommonResourceManager
 from memmachine.kv_store.protocol import KvStore
 from memmachine.kv_store.sql_store import SqlKvStore
+from memmachine.library_store.protocol import LibraryStore
+from memmachine.library_store.sql_store import SqlLibraryStore
 from memmachine.semantic_memory.semantic_memory import SemanticService
 from memmachine.semantic_memory.semantic_model import (
     ResourceRetriever,
@@ -49,6 +51,7 @@ class SemanticResourceManager:
         self._semantic_service: SemanticService | None = None
         self._semantic_session_manager: SemanticSessionManager | None = None
         self._kv_store: KvStore | None = None
+        self._library_store: LibraryStore | None = None
 
     async def close(self) -> None:
         """Stop semantic services if they were started."""
@@ -162,4 +165,25 @@ class SemanticResourceManager:
         store = SqlKvStore(sql_engine)
         await store.startup()
         self._kv_store = store
+        return store
+
+    async def get_library_store(self) -> LibraryStore:
+        """Return the role-scoped library in the semantic database."""
+        if self._library_store is not None:
+            return self._library_store
+
+        await self.get_semantic_service()
+        try:
+            sql_engine = await self._resource_manager.get_sql_engine(
+                self._conf.database,
+                validate=True,
+            )
+        except ValueError as error:
+            raise InvalidArgumentError(
+                "Library storage requires the semantic memory database to be Postgres",
+            ) from error
+
+        store = SqlLibraryStore(sql_engine)
+        await store.startup()
+        self._library_store = store
         return store

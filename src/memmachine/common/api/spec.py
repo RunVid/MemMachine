@@ -11,6 +11,7 @@ except ImportError:
     UTC = timezone.utc
 
 from typing import Annotated, Any
+from uuid import UUID
 
 # Python 3.11+ has Self in typing, Python 3.10 uses typing_extensions
 try:
@@ -1153,6 +1154,255 @@ class KvListResponse(BaseModel):
     key: Annotated[str, Field(..., description=SpecDoc.KV_KEY)]
     entries: Annotated[list[KvRecord], Field(..., description=SpecDoc.KV_ENTRIES)]
     total: Annotated[int, Field(..., description=SpecDoc.KV_TOTAL)]
+
+
+LIBRARY_NAME_MAX_LENGTH = 256
+LIBRARY_CONTENT_MAX_LENGTH = 40000
+LIBRARY_DESCRIPTION_MAX_LENGTH = 512
+LIBRARY_MAX_FILES_PER_CATEGORY = 20
+
+
+class LibraryCategory(str, Enum):
+    """Allowed categories for a library file."""
+
+    PERSONAL = "personal"
+    BUSINESS = "business"
+
+
+def _library_name(value: str) -> str:
+    name = value.strip()
+    if not name:
+        raise ValueError("name is required")
+    if len(name) > LIBRARY_NAME_MAX_LENGTH:
+        raise ValueError(f"name must be at most {LIBRARY_NAME_MAX_LENGTH} characters")
+    return name
+
+
+def _library_description(value: str) -> str:
+    description = value.strip()
+    if not description:
+        raise ValueError("description is required")
+    if "\n" in description or "\r" in description:
+        raise ValueError("description must be a single line")
+    if len(description) > LIBRARY_DESCRIPTION_MAX_LENGTH:
+        raise ValueError(
+            f"description must be at most {LIBRARY_DESCRIPTION_MAX_LENGTH} characters"
+        )
+    return description
+
+
+def _library_content(value: str) -> str:
+    if not value.strip():
+        raise ValueError("content is required")
+    if len(value) > LIBRARY_CONTENT_MAX_LENGTH:
+        raise ValueError(
+            f"content must be at most {LIBRARY_CONTENT_MAX_LENGTH} characters"
+        )
+    return value
+
+
+def _library_category(value: object) -> LibraryCategory:
+    if isinstance(value, LibraryCategory):
+        return value
+    text = str(value).strip().casefold()
+    try:
+        return LibraryCategory(text)
+    except ValueError as error:
+        raise ValueError("category must be personal or business") from error
+
+
+def _library_id(value: str) -> str:
+    text = value.strip()
+    try:
+        return str(UUID(text))
+    except ValueError as error:
+        raise ValueError("id must be a UUID") from error
+
+
+class CreateLibrarySpec(_WithOrgAndProj):
+    """Store one document with a client-chosen title."""
+
+    role_id: Annotated[
+        SafeId,
+        Field(
+            ..., description=SpecDoc.LIBRARY_ROLE_ID, examples=Examples.LIBRARY_ROLE_ID
+        ),
+    ]
+    name: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_NAME, examples=Examples.LIBRARY_NAME),
+    ]
+    content: Annotated[
+        str,
+        Field(
+            ...,
+            description=SpecDoc.LIBRARY_CONTENT,
+            examples=Examples.LIBRARY_CONTENT,
+        ),
+    ]
+    description: Annotated[
+        str,
+        Field(
+            ...,
+            description=SpecDoc.LIBRARY_DESCRIPTION,
+            examples=Examples.LIBRARY_DESCRIPTION,
+        ),
+    ]
+    category: Annotated[
+        LibraryCategory,
+        Field(
+            ...,
+            description=SpecDoc.LIBRARY_CATEGORY,
+            examples=Examples.LIBRARY_CATEGORY,
+        ),
+    ]
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        return _library_description(value)
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def validate_category(cls, value: str) -> LibraryCategory:
+        return _library_category(value)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        return _library_name(value)
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        return _library_content(value)
+
+
+class _LibraryIdSpec(_WithOrgAndProj):
+    """Scope plus the stable file id."""
+
+    role_id: Annotated[
+        SafeId,
+        Field(
+            ..., description=SpecDoc.LIBRARY_ROLE_ID, examples=Examples.LIBRARY_ROLE_ID
+        ),
+    ]
+    id: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_ID, examples=Examples.LIBRARY_ID),
+    ]
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, value: str) -> str:
+        return _library_id(value)
+
+
+class UpdateLibrarySpec(_LibraryIdSpec):
+    """Overwrite title, body, and summary. Category is not changed."""
+
+    name: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_NAME, examples=Examples.LIBRARY_NAME),
+    ]
+    content: Annotated[
+        str,
+        Field(
+            ...,
+            description=SpecDoc.LIBRARY_CONTENT,
+            examples=Examples.LIBRARY_CONTENT,
+        ),
+    ]
+    description: Annotated[
+        str,
+        Field(
+            ...,
+            description=SpecDoc.LIBRARY_DESCRIPTION,
+            examples=Examples.LIBRARY_DESCRIPTION,
+        ),
+    ]
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        return _library_name(value)
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        return _library_content(value)
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        return _library_description(value)
+
+
+class LibraryIdSpec(_LibraryIdSpec):
+    """Identify one library file by id."""
+
+
+class ListLibrarySpec(_WithOrgAndProj):
+    """List file ids and titles for one role."""
+
+    role_id: Annotated[
+        SafeId,
+        Field(
+            ..., description=SpecDoc.LIBRARY_ROLE_ID, examples=Examples.LIBRARY_ROLE_ID
+        ),
+    ]
+
+
+class LibraryFileResponse(BaseModel):
+    """One stored library document."""
+
+    id: Annotated[str, Field(..., description=SpecDoc.LIBRARY_ID)]
+    name: Annotated[str, Field(..., description=SpecDoc.LIBRARY_NAME)]
+    content: Annotated[str, Field(..., description=SpecDoc.LIBRARY_CONTENT)]
+    description: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_DESCRIPTION),
+    ]
+    category: Annotated[
+        LibraryCategory,
+        Field(..., description=SpecDoc.LIBRARY_CATEGORY),
+    ]
+    created_at: Annotated[
+        AwareDatetime,
+        Field(..., description=SpecDoc.LIBRARY_CREATED_AT),
+    ]
+    updated_at: Annotated[
+        AwareDatetime,
+        Field(..., description=SpecDoc.LIBRARY_UPDATED_AT),
+    ]
+
+
+class LibraryNameResponse(BaseModel):
+    """A file id, title, and summary, without the body."""
+
+    id: Annotated[str, Field(..., description=SpecDoc.LIBRARY_ID)]
+    name: Annotated[str, Field(..., description=SpecDoc.LIBRARY_NAME)]
+    description: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_DESCRIPTION),
+    ]
+    category: Annotated[
+        LibraryCategory,
+        Field(..., description=SpecDoc.LIBRARY_CATEGORY),
+    ]
+    updated_at: Annotated[
+        AwareDatetime,
+        Field(..., description=SpecDoc.LIBRARY_UPDATED_AT),
+    ]
+
+
+class LibraryListResponse(BaseModel):
+    """File names for one role, newest update first."""
+
+    files: Annotated[
+        list[LibraryNameResponse],
+        Field(..., description=SpecDoc.LIBRARY_FILES),
+    ]
 
 
 class Version(BaseModel):

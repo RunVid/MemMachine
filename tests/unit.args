@@ -1,0 +1,3 @@
+tests/memmachine/library_store/test_library_store.py
+tests/memmachine/kv_store/test_kv_store.py
+tests/memmachine/server/api_v2/test_spec.py

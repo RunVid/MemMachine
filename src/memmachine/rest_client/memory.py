@@ -38,6 +38,7 @@ from memmachine.common.api.spec import (
     SemanticIsolation,
     UpdateLibraryCategorySpec,
     UpdateLibraryContentSpec,
+    _library_category,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
 )
@@ -860,7 +861,7 @@ class Memory:
             name=name,
             content=content,
             description=description,
-            category=category,
+            category=_library_category(category),
         )
         response = self.client.request(
             "POST",
@@ -916,7 +917,7 @@ class Memory:
             project_id=self.__project_id,
             role_id=self._require_role_id(role_id),
             id=file_id,
-            category=category,
+            category=_library_category(category),
         )
         response = self.client.request(
             "POST",

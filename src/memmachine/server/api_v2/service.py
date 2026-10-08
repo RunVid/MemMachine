@@ -37,6 +37,7 @@ from memmachine.common.api.spec import (
     SemanticIsolation,
     UpdateLibraryCategorySpec,
     UpdateLibraryContentSpec,
+    _library_category,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
 )
@@ -480,7 +481,7 @@ def _library_file(file: LibraryFile) -> LibraryFileResponse:
         name=file.name,
         content=file.content,
         description=file.description,
-        category=file.category,
+        category=_library_category(file.category),
         always_loaded=file.always_loaded,
         created_at=file.created_at,
         updated_at=file.updated_at,
@@ -492,7 +493,7 @@ def _library_name(item: LibraryName) -> LibraryNameResponse:
         id=item.id,
         name=item.name,
         description=item.description,
-        category=item.category,
+        category=_library_category(item.category),
         updated_at=item.updated_at,
     )
 

@@ -167,6 +167,9 @@ class SpecDoc:
     LIBRARY_DESCRIPTION = """
     Required one-line summary for the file. Single line, at most 512 characters."""
 
+    LIBRARY_CATEGORY = """
+    Required file category. Must be personal or business."""
+
     LIBRARY_ALWAYS_LOADED = """
     Reserved for future use. New files are stored as false. Not used yet."""
 
@@ -177,7 +180,8 @@ class SpecDoc:
     UTC time when this file's body was last replaced."""
 
     LIBRARY_FILES = """
-    File ids, titles, one-line summaries, and update times. Bodies are omitted."""
+    File ids, titles, categories, one-line summaries, and update times. Bodies
+    are omitted."""
 
     SEMANTIC_METADATA_OTHER = "Additional storage metadata for the semantic feature."
 
@@ -401,6 +405,7 @@ class Examples:
     LIBRARY_ID: ClassVar[list[str]] = ["8d0c1a2e-4b3f-4e1a-9c2d-6f7a8b9c0d1e"]
     LIBRARY_NAME: ClassVar[list[str]] = ["服务范围"]
     LIBRARY_DESCRIPTION: ClassVar[list[str]] = ["Weekday lobby and office coverage"]
+    LIBRARY_CATEGORY: ClassVar[list[str]] = ["business"]
     LIBRARY_CONTENT: ClassVar[list[str]] = [
         "Weekday service covers the office floors and the lobby.",
     ]
@@ -602,7 +607,8 @@ class RouterDoc:
     CREATE_LIBRARY = """
     Store one document for one role.
 
-    Required fields: `role_id`, `name`, `content`, and `description`.
+    Required fields: `role_id`, `name`, `content`, `description`, and
+    `category` (`personal` or `business`).
     `content` may be Markdown pasted as plain text. At most 50 files are
     allowed in the same project and role; a further create returns 422.
     Duplicate names in the same project and role
@@ -633,16 +639,17 @@ class RouterDoc:
     GET_LIBRARY = """
     Read one library file by id.
 
-    Returns the title, body, and description. This is an id lookup, not a
-    semantic search. If the id does not exist, a not-found error is returned.
+    Returns the title, body, description, and category. This is an id lookup,
+    not a semantic search. If the id does not exist, a not-found error is
+    returned.
     """
 
     LIST_LIBRARY = """
     List library files for one role.
 
-    Response entries contain the id, title, description, and last update time.
-    Document bodies are omitted. An empty list is returned when the role has no
-    files.
+    Response entries contain the id, title, category, description, and last
+    update time. Document bodies are omitted. An empty list is returned when
+    the role has no files.
     """
 
     DELETE_SEMANTIC_MEMORY = """

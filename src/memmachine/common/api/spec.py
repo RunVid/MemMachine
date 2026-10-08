@@ -1162,6 +1162,13 @@ LIBRARY_DESCRIPTION_MAX_LENGTH = 512
 LIBRARY_MAX_FILES_PER_SCOPE = 50
 
 
+class LibraryCategory(str, Enum):
+    """Allowed categories for a library file."""
+
+    PERSONAL = "personal"
+    BUSINESS = "business"
+
+
 def _library_name(value: str) -> str:
     name = value.strip()
     if not name:
@@ -1192,6 +1199,16 @@ def _library_content(value: str) -> str:
             f"content must be at most {LIBRARY_CONTENT_MAX_LENGTH} characters"
         )
     return value
+
+
+def _library_category(value: object) -> LibraryCategory:
+    if isinstance(value, LibraryCategory):
+        return value
+    text = str(value).strip().casefold()
+    try:
+        return LibraryCategory(text)
+    except ValueError as error:
+        raise ValueError("category must be personal or business") from error
 
 
 def _library_id(value: str) -> str:
@@ -1231,11 +1248,24 @@ class CreateLibrarySpec(_WithOrgAndProj):
             examples=Examples.LIBRARY_DESCRIPTION,
         ),
     ]
+    category: Annotated[
+        LibraryCategory,
+        Field(
+            ...,
+            description=SpecDoc.LIBRARY_CATEGORY,
+            examples=Examples.LIBRARY_CATEGORY,
+        ),
+    ]
 
     @field_validator("description")
     @classmethod
     def validate_description(cls, value: str) -> str:
         return _library_description(value)
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def validate_category(cls, value: str) -> LibraryCategory:
+        return _library_category(value)
 
     @field_validator("name")
     @classmethod
@@ -1325,6 +1355,10 @@ class LibraryFileResponse(BaseModel):
         str,
         Field(..., description=SpecDoc.LIBRARY_DESCRIPTION),
     ]
+    category: Annotated[
+        LibraryCategory,
+        Field(..., description=SpecDoc.LIBRARY_CATEGORY),
+    ]
     always_loaded: Annotated[
         bool,
         Field(..., description=SpecDoc.LIBRARY_ALWAYS_LOADED),
@@ -1347,6 +1381,10 @@ class LibraryNameResponse(BaseModel):
     description: Annotated[
         str,
         Field(..., description=SpecDoc.LIBRARY_DESCRIPTION),
+    ]
+    category: Annotated[
+        LibraryCategory,
+        Field(..., description=SpecDoc.LIBRARY_CATEGORY),
     ]
     updated_at: Annotated[
         AwareDatetime,

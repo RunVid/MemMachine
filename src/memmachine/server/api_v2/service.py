@@ -479,6 +479,7 @@ def _library_file(file: LibraryFile) -> LibraryFileResponse:
         name=file.name,
         content=file.content,
         description=file.description,
+        category=file.category,
         always_loaded=file.always_loaded,
         created_at=file.created_at,
         updated_at=file.updated_at,
@@ -490,6 +491,7 @@ def _library_name(item: LibraryName) -> LibraryNameResponse:
         id=item.id,
         name=item.name,
         description=item.description,
+        category=item.category,
         updated_at=item.updated_at,
     )
 
@@ -505,6 +507,7 @@ async def _create_library(
         name=spec.name,
         content=spec.content,
         description=spec.description,
+        category=spec.category,
     )
     return _library_file(file)
 

@@ -741,6 +741,7 @@ class MemMachine:
         name: str,
         content: str,
         description: str,
+        category: str,
     ) -> LibraryFile:
         """Store one document. A duplicate title in this scope is rejected."""
         store = await self._library_store()
@@ -752,6 +753,7 @@ class MemMachine:
             name=name,
             content=content,
             description=description,
+            category=category,
         )
 
     async def update_library_content(

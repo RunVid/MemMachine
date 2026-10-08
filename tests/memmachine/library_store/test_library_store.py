@@ -12,6 +12,7 @@ from memmachine.common.api.spec import (
     LIBRARY_DESCRIPTION_MAX_LENGTH,
     LIBRARY_MAX_FILES_PER_SCOPE,
     CreateLibrarySpec,
+    LibraryCategory,
     LibraryIdSpec,
 )
 from memmachine.common.errors import (
@@ -32,8 +33,10 @@ def test_create_spec_requires_name_and_validates_fields():
         name="服务范围",
         content="  # 服务范围\n\n工作日覆盖前厅。  ",
         description="Lobby coverage",
+        category="business",
     )
     assert spec.content.startswith("  #")
+    assert spec.category == LibraryCategory.BUSINESS
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
             org_id="org",
@@ -42,6 +45,7 @@ def test_create_spec_requires_name_and_validates_fields():
             name="服务范围",
             content="   ",
             description="summary",
+            category="personal",
         )
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
@@ -51,6 +55,7 @@ def test_create_spec_requires_name_and_validates_fields():
             name="服务范围",
             content="正文",
             description="   ",
+            category="personal",
         )
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
@@ -60,6 +65,7 @@ def test_create_spec_requires_name_and_validates_fields():
             name="服务范围",
             content="x" * (LIBRARY_CONTENT_MAX_LENGTH + 1),
             description="summary",
+            category="personal",
         )
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
@@ -69,6 +75,7 @@ def test_create_spec_requires_name_and_validates_fields():
             name="服务范围",
             content="正文",
             description="line one\nline two",
+            category="personal",
         )
     with pytest.raises(ValidationError):
         CreateLibrarySpec(
@@ -78,7 +85,37 @@ def test_create_spec_requires_name_and_validates_fields():
             name="服务范围",
             content="正文",
             description="x" * (LIBRARY_DESCRIPTION_MAX_LENGTH + 1),
+            category="personal",
         )
+    with pytest.raises(ValidationError):
+        CreateLibrarySpec(
+            org_id="org",
+            project_id="project",
+            role_id="library",
+            name="服务范围",
+            content="正文",
+            description="summary",
+        )
+    with pytest.raises(ValidationError):
+        CreateLibrarySpec(
+            org_id="org",
+            project_id="project",
+            role_id="library",
+            name="服务范围",
+            content="正文",
+            description="summary",
+            category="work",
+        )
+    spec = CreateLibrarySpec(
+        org_id="org",
+        project_id="project",
+        role_id="library",
+        name="服务范围",
+        content="正文",
+        description="summary",
+        category=" PERSONAL ",
+    )
+    assert spec.category == LibraryCategory.PERSONAL
 
 
 def test_id_spec_requires_a_uuid():
@@ -102,6 +139,7 @@ async def _create(
     name: str,
     content: str = "正文",
     description: str = "One-line summary",
+    category: str = "personal",
 ) -> str:
     created = await store.create(
         org_id="org",
@@ -111,6 +149,7 @@ async def _create(
         name=name,
         content=content,
         description=description,
+        category=category,
     )
     return created.id
 
@@ -123,6 +162,7 @@ async def test_get_returns_name_content_and_description():
         "服务范围",
         content="body",
         description="Lobby coverage",
+        category="business",
     )
     file = await store.get(
         org_id="org",
@@ -133,6 +173,7 @@ async def test_get_returns_name_content_and_description():
     assert file.name == "服务范围"
     assert file.content == "body"
     assert file.description == "Lobby coverage"
+    assert file.category == "business"
     assert file.always_loaded is False
 
 
@@ -166,6 +207,7 @@ async def test_memory_store_keeps_id_when_content_and_title_change():
     assert listed[0].id == file_id
     assert listed[0].name == "营业时间"
     assert listed[0].description == "One-line summary"
+    assert listed[0].category == "personal"
 
 
 @pytest.mark.asyncio
@@ -298,6 +340,7 @@ async def _fill_scope(
             name=f"file-{i}",
             content="body",
             description="summary",
+            category="personal",
         )
         ids.append(created.id)
     return ids
@@ -317,6 +360,7 @@ async def test_memory_store_rejects_a_fifty_first_file_in_the_same_scope():
             name="file-50",
             content="body",
             description="summary",
+            category="personal",
         )
     await store.create(
         org_id="org",
@@ -326,6 +370,7 @@ async def test_memory_store_rejects_a_fifty_first_file_in_the_same_scope():
         name="file-0",
         content="body",
         description="summary",
+        category="personal",
     )
     await store.delete(
         org_id="org",
@@ -341,6 +386,7 @@ async def test_memory_store_rejects_a_fifty_first_file_in_the_same_scope():
         name="file-50",
         content="body",
         description="summary",
+        category="personal",
     )
     assert created.name == "file-50"
 
@@ -364,5 +410,6 @@ async def test_sql_store_rejects_a_fifty_first_file_in_the_same_scope():
             name="file-50",
             content="body",
             description="summary",
+            category="personal",
         )
     await engine.dispose()

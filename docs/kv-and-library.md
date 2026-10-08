@@ -99,15 +99,16 @@ Use this for a document the user files. `role_id` is `library`. MemMachine assig
 
 The body is stored as written, including Markdown. It is plain text. The maximum length is 40000 characters. It is not extracted and it is not searchable.
 
-**Create requires `name`, `content`, and `description`.** Send the title, body, and one-line summary. The body may be Markdown pasted as plain text (stored as written). Titles are unique for that project and role. If the same title already exists, create returns **409** and nothing is written. MemMachine does not rename files or add numeric suffixes. One project and role may hold at most **50** files; a 51st create returns **422**.
+**Create requires `name`, `content`, `description`, and `category`.** Send the title, body, one-line summary, and category. `category` must be `personal` or `business`. The body may be Markdown pasted as plain text (stored as written). Titles are unique for that project and role. If the same title already exists, create returns **409** and nothing is written. MemMachine does not rename files or add numeric suffixes. One project and role may hold at most **50** files; a 51st create returns **422**.
 
-**`description`** is a single line, at most 512 characters.
+**`description`** is a single line, at most 512 characters. **`category`** is stored as written at create and is not changed by rename or replace-body.
 
 ```python
 created = memory.create_library(
     content="# Service area\n\nWeekday coverage for the office and the lobby.",
     name="Service area",
     description="Weekday lobby and office coverage",
+    category="business",
     role_id="library",
 )
 memory.update_library_content(
@@ -127,13 +128,13 @@ memory.list_library(role_id="library")
 
 | Operation | Path | Success | Failure |
 |---|---|---|---|
-| Create | `POST /api/v2/memories/library` | 201, returns `id`, title, body, and description | Missing or invalid fields, or 50 files already in this scope: 422. Title already exists: 409 |
+| Create | `POST /api/v2/memories/library` | 201, returns `id`, title, body, description, and category | Missing or invalid fields (including `category` not `personal`/`business`), or 50 files already in this scope: 422. Title already exists: 409 |
 | Replace body | `POST /api/v2/memories/library/content` | 200, title unchanged | Unknown `id`: 404, no file is created |
 | Rename | `POST /api/v2/memories/library/rename` | 200, `id` unchanged | Unknown `id`: 404. Title already exists: 409, previous title kept |
 | Delete | `POST /api/v2/memories/library/delete` | 204 | A missing `id` still returns 204 |
-| Read | `POST /api/v2/memories/library/get` | 200, returns `name`, `content`, and `description` | Unknown `id`: 404 |
-| List | `POST /api/v2/memories/library/list` | 200, each file has `id`, `name`, `description`, `updated_at` | No files: `files` is `[]` |
+| Read | `POST /api/v2/memories/library/get` | 200, returns `name`, `content`, `description`, and `category` | Unknown `id`: 404 |
+| List | `POST /api/v2/memories/library/list` | 200, each file has `id`, `name`, `description`, `category`, `updated_at` | No files: `files` is `[]` |
 
-List entries are `id`, `name`, `description`, and `updated_at`. They do not include the body.
+List entries are `id`, `name`, `description`, `category`, and `updated_at`. They do not include the body.
 
-The file page collects title, Markdown body, and one-line summary, then creates with those fields. On 409, prompt for a different title. Replace, rename, and delete use the returned `id`. Facts about the user still go through normal memory. The assistant can call list once per turn to show each file's title and summary in tool text, then call get with `id` only when it needs the Markdown body.
+The file page collects title, Markdown body, one-line summary, and category (`personal` or `business`), then creates with those fields. On 409, prompt for a different title. Replace, rename, and delete use the returned `id`. Facts about the user still go through normal memory. The assistant can call list once per turn to show each file's title, category, and summary in tool text, then call get with `id` only when it needs the Markdown body.

@@ -48,6 +48,7 @@ library_entry_table = Table(
     Column("name", String, nullable=False),
     Column("content", String, nullable=False),
     Column("description", String, nullable=False, server_default=""),
+    Column("category", String, nullable=False),
     Column("always_loaded", Boolean, nullable=False, server_default=false()),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
@@ -68,6 +69,7 @@ def _file_from_mapping(mapping: object) -> LibraryFile:
         name=str(row["name"]),
         content=str(row["content"]),
         description=str(row.get("description", "") or ""),
+        category=str(row["category"]),
         always_loaded=bool(row.get("always_loaded", False)),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -120,7 +122,8 @@ class SqlLibraryStore:
         file_id: str,
         name: str,
         content: str,
-        description: str = "",
+        description: str,
+        category: str,
     ) -> LibraryFile:
         now = datetime.now(UTC)
         table = library_entry_table.c
@@ -141,6 +144,7 @@ class SqlLibraryStore:
             name=name,
             content=content,
             description=description,
+            category=category,
             always_loaded=False,
             created_at=now,
             updated_at=now,
@@ -160,6 +164,7 @@ class SqlLibraryStore:
             name=name,
             content=content,
             description=description,
+            category=category,
             always_loaded=False,
             created_at=now,
             updated_at=now,
@@ -266,7 +271,13 @@ class SqlLibraryStore:
     ) -> list[LibraryName]:
         table = library_entry_table.c
         stmt = (
-            select(table.id, table.name, table.description, table.updated_at)
+            select(
+                table.id,
+                table.name,
+                table.description,
+                table.category,
+                table.updated_at,
+            )
             .where(
                 (table.org_id == org_id)
                 & (table.project_id == project_id)
@@ -281,6 +292,7 @@ class SqlLibraryStore:
                 id=str(row["id"]),
                 name=str(row["name"]),
                 description=str(row.get("description", "") or ""),
+                category=str(row["category"]),
                 updated_at=row["updated_at"],
             )
             for row in rows

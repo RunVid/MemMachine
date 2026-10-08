@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(), nullable=False),
         sa.Column("content", sa.String(), nullable=False),
         sa.Column("description", sa.String(), nullable=False, server_default=""),
+        sa.Column("category", sa.String(), nullable=False),
         sa.Column(
             "always_loaded",
             sa.Boolean(),

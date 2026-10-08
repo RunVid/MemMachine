@@ -20,7 +20,8 @@ class LibraryStore(Protocol):
         file_id: str,
         name: str,
         content: str,
-        description: str = "",
+        description: str,
+        category: str,
     ) -> LibraryFile:
         """Insert a finished document. The title must be free in this scope."""
 

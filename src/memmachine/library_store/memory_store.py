@@ -47,7 +47,8 @@ class InMemoryLibraryStore(LibraryStore):
         file_id: str,
         name: str,
         content: str,
-        description: str = "",
+        description: str,
+        category: str,
     ) -> LibraryFile:
         now = datetime.now(UTC)
         file = LibraryFile(
@@ -55,6 +56,7 @@ class InMemoryLibraryStore(LibraryStore):
             name=name,
             content=content,
             description=description,
+            category=category,
             always_loaded=False,
             created_at=now,
             updated_at=now,
@@ -160,6 +162,7 @@ class InMemoryLibraryStore(LibraryStore):
                     id=file.id,
                     name=file.name,
                     description=file.description,
+                    category=file.category,
                     updated_at=file.updated_at,
                 )
                 for (row_org, row_project, row_role, _), file in self._files.items()

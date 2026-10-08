@@ -12,6 +12,7 @@ class LibraryFile:
     name: str
     content: str
     description: str
+    category: str
     always_loaded: bool
     created_at: datetime
     updated_at: datetime
@@ -24,4 +25,5 @@ class LibraryName:
     id: str
     name: str
     description: str
+    category: str
     updated_at: datetime

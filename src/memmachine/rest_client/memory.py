@@ -839,14 +839,15 @@ class Memory:
         content: str,
         name: str,
         description: str,
+        category: str,
         role_id: str = "",
         timeout: int | None = None,
     ) -> LibraryFileResponse:
         """
-        Store one document with a user-chosen title, body, and one-line summary.
+        Store one document with a user-chosen title, body, summary, and category.
 
-        Body may be Markdown. Duplicate titles in the same project and role
-        return 409.
+        Category must be personal or business. Body may be Markdown. Duplicate
+        titles in the same project and role return 409.
         """
         if self._client_closed:
             raise RuntimeError("Cannot create library file: client has been closed")
@@ -858,6 +859,7 @@ class Memory:
             name=name,
             content=content,
             description=description,
+            category=category,
         )
         response = self.client.request(
             "POST",
@@ -981,7 +983,7 @@ class Memory:
         role_id: str = "",
         timeout: int | None = None,
     ) -> LibraryListResponse:
-        """List library ids, titles, and summaries for one role. Bodies are omitted."""
+        """List library ids, titles, categories, and summaries. Bodies are omitted."""
         if self._client_closed:
             raise RuntimeError("Cannot list library files: client has been closed")
 

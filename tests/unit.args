@@ -1,12 +1,3 @@
-tests/memmachine/semantic_memory/test_semantic_ingestion.py
-tests/memmachine/semantic_memory/storage/test_semantic_storage.py
-tests/memmachine/semantic_memory/test_category_tags.py
-tests/memmachine/semantic_memory/test_semantic_memory.py
-tests/memmachine/semantic_memory/test_semantic_memory_background.py
-tests/memmachine/semantic_memory/test_semantic_session_manager.py
-tests/memmachine/semantic_memory/test_semantic_session_resource.py
-tests/memmachine/semantic_memory/test_semantic_llm.py
-tests/memmachine/semantic_memory/test_semantic_manual_write.py
 tests/memmachine/library_store/test_library_store.py
 tests/memmachine/kv_store/test_kv_store.py
 tests/memmachine/server/api_v2/test_spec.py

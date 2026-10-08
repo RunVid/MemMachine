@@ -117,6 +117,14 @@ class LibraryNameExistsError(MemMachineError):
         super().__init__(f"Library file '{name}' already exists")
 
 
+class LibraryFileLimitError(MemMachineError):
+    """A project role already has the maximum number of library files."""
+
+    def __init__(self, limit: int) -> None:
+        """Initialize with the per-scope file limit."""
+        super().__init__(f"Library allows at most {limit} files in this scope")
+
+
 class EpisodicMemoryManagerClosedError(MemMachineError):
     """Exception raised when operating on a closed EpisodicMemory instance."""
 

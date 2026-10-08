@@ -13,13 +13,19 @@ from sqlalchemy import (
     UniqueConstraint,
     delete,
     false,
+    func,
     select,
     update,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from memmachine.common.errors import LibraryNameExistsError, ResourceNotFoundError
+from memmachine.common.api.spec import LIBRARY_MAX_FILES_PER_SCOPE
+from memmachine.common.errors import (
+    LibraryFileLimitError,
+    LibraryNameExistsError,
+    ResourceNotFoundError,
+)
 from memmachine.library_store.model import LibraryFile, LibraryName
 
 
@@ -117,6 +123,16 @@ class SqlLibraryStore:
         description: str = "",
     ) -> LibraryFile:
         now = datetime.now(UTC)
+        table = library_entry_table.c
+        count_stmt = (
+            select(func.count())
+            .select_from(library_entry_table)
+            .where(
+                (table.org_id == org_id)
+                & (table.project_id == project_id)
+                & (table.role_id == role_id)
+            )
+        )
         stmt = library_entry_table.insert().values(
             id=file_id,
             org_id=org_id,
@@ -130,6 +146,9 @@ class SqlLibraryStore:
             updated_at=now,
         )
         async with self._session() as session:
+            count = int((await session.execute(count_stmt)).scalar_one())
+            if count >= LIBRARY_MAX_FILES_PER_SCOPE:
+                raise LibraryFileLimitError(LIBRARY_MAX_FILES_PER_SCOPE)
             try:
                 await session.execute(stmt)
                 await session.commit()

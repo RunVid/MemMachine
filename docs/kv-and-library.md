@@ -99,7 +99,7 @@ Use this for a document the user files. `role_id` is `library`. MemMachine assig
 
 The body is stored as written, including Markdown. It is plain text. The maximum length is 40000 characters. It is not extracted and it is not searchable.
 
-**Create requires `name`, `content`, and `description`.** Send the title, body, and one-line summary. The body may be Markdown pasted as plain text (stored as written). Titles are unique for that project and role. If the same title already exists, create returns **409** and nothing is written. MemMachine does not rename files or add numeric suffixes.
+**Create requires `name`, `content`, and `description`.** Send the title, body, and one-line summary. The body may be Markdown pasted as plain text (stored as written). Titles are unique for that project and role. If the same title already exists, create returns **409** and nothing is written. MemMachine does not rename files or add numeric suffixes. One project and role may hold at most **50** files; a 51st create returns **422**.
 
 **`description`** is a single line, at most 512 characters.
 
@@ -127,7 +127,7 @@ memory.list_library(role_id="library")
 
 | Operation | Path | Success | Failure |
 |---|---|---|---|
-| Create | `POST /api/v2/memories/library` | 201, returns `id`, title, body, and description | Missing or invalid fields: 422. Title already exists: 409 |
+| Create | `POST /api/v2/memories/library` | 201, returns `id`, title, body, and description | Missing or invalid fields, or 50 files already in this scope: 422. Title already exists: 409 |
 | Replace body | `POST /api/v2/memories/library/content` | 200, title unchanged | Unknown `id`: 404, no file is created |
 | Rename | `POST /api/v2/memories/library/rename` | 200, `id` unchanged | Unknown `id`: 404. Title already exists: 409, previous title kept |
 | Delete | `POST /api/v2/memories/library/delete` | 204 | A missing `id` still returns 204 |

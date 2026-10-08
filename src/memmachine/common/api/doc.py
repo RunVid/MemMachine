@@ -603,8 +603,9 @@ class RouterDoc:
     Store one document for one role.
 
     Required fields: `role_id`, `name`, `content`, and `description`.
-    `content` may be Markdown pasted as plain text. Duplicate names in the same
-    project and role
+    `content` may be Markdown pasted as plain text. At most 50 files are
+    allowed in the same project and role; a further create returns 422.
+    Duplicate names in the same project and role
     return 409 and leave existing files unchanged. Markdown is kept as plain
     text and is not extracted into episodic or semantic memory.
     """

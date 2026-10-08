@@ -51,6 +51,7 @@ from memmachine.common.configuration.episodic_config import (
 from memmachine.common.errors import (
     ConfigurationError,
     InvalidArgumentError,
+    LibraryFileLimitError,
     LibraryNameExistsError,
     ResourceNotFoundError,
     SessionAlreadyExistsError,
@@ -460,6 +461,8 @@ async def get_kv(
 
 
 def _library_error(error: Exception, *, action: str) -> RestError:
+    if isinstance(error, LibraryFileLimitError):
+        return RestError(code=422, message=str(error), ex=error)
     if isinstance(error, LibraryNameExistsError):
         return RestError(code=409, message=str(error), ex=error)
     if isinstance(error, ResourceNotFoundError):

@@ -10,10 +10,15 @@ from sqlalchemy.pool import StaticPool
 from memmachine.common.api.spec import (
     LIBRARY_CONTENT_MAX_LENGTH,
     LIBRARY_DESCRIPTION_MAX_LENGTH,
+    LIBRARY_MAX_FILES_PER_SCOPE,
     CreateLibrarySpec,
     LibraryIdSpec,
 )
-from memmachine.common.errors import LibraryNameExistsError, ResourceNotFoundError
+from memmachine.common.errors import (
+    LibraryFileLimitError,
+    LibraryNameExistsError,
+    ResourceNotFoundError,
+)
 from memmachine.library_store.memory_store import InMemoryLibraryStore
 from memmachine.library_store.protocol import LibraryStore
 from memmachine.library_store.sql_store import SqlLibraryStore
@@ -271,5 +276,93 @@ async def test_sql_store_uses_id_and_rejects_a_duplicate_title():
             project_id="project",
             role_id="library",
             file_id=file_id,
+        )
+    await engine.dispose()
+
+
+async def _fill_scope(
+    store: LibraryStore,
+    *,
+    count: int,
+    org_id: str = "org",
+    project_id: str = "project",
+    role_id: str = "library",
+) -> list[str]:
+    ids: list[str] = []
+    for i in range(count):
+        created = await store.create(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            file_id=str(uuid4()),
+            name=f"file-{i}",
+            content="body",
+            description="summary",
+        )
+        ids.append(created.id)
+    return ids
+
+
+@pytest.mark.asyncio
+async def test_memory_store_rejects_a_fifty_first_file_in_the_same_scope():
+    store = InMemoryLibraryStore()
+    ids = await _fill_scope(store, count=LIBRARY_MAX_FILES_PER_SCOPE)
+    assert len(ids) == LIBRARY_MAX_FILES_PER_SCOPE
+    with pytest.raises(LibraryFileLimitError):
+        await store.create(
+            org_id="org",
+            project_id="project",
+            role_id="library",
+            file_id=str(uuid4()),
+            name="file-50",
+            content="body",
+            description="summary",
+        )
+    await store.create(
+        org_id="org",
+        project_id="other-project",
+        role_id="library",
+        file_id=str(uuid4()),
+        name="file-0",
+        content="body",
+        description="summary",
+    )
+    await store.delete(
+        org_id="org",
+        project_id="project",
+        role_id="library",
+        file_id=ids[0],
+    )
+    created = await store.create(
+        org_id="org",
+        project_id="project",
+        role_id="library",
+        file_id=str(uuid4()),
+        name="file-50",
+        content="body",
+        description="summary",
+    )
+    assert created.name == "file-50"
+
+
+@pytest.mark.asyncio
+async def test_sql_store_rejects_a_fifty_first_file_in_the_same_scope():
+    engine = create_async_engine(
+        "sqlite+aiosqlite://",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    store = SqlLibraryStore(engine)
+    await store.startup()
+    await _fill_scope(store, count=LIBRARY_MAX_FILES_PER_SCOPE)
+    with pytest.raises(LibraryFileLimitError):
+        await store.create(
+            org_id="org",
+            project_id="project",
+            role_id="library",
+            file_id=str(uuid4()),
+            name="file-50",
+            content="body",
+            description="summary",
         )
     await engine.dispose()

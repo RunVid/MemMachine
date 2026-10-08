@@ -4,7 +4,12 @@ import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from memmachine.common.errors import LibraryNameExistsError, ResourceNotFoundError
+from memmachine.common.api.spec import LIBRARY_MAX_FILES_PER_SCOPE
+from memmachine.common.errors import (
+    LibraryFileLimitError,
+    LibraryNameExistsError,
+    ResourceNotFoundError,
+)
 from memmachine.library_store.model import LibraryFile, LibraryName
 from memmachine.library_store.protocol import LibraryStore
 
@@ -55,6 +60,15 @@ class InMemoryLibraryStore(LibraryStore):
             updated_at=now,
         )
         async with self._lock:
+            in_scope = sum(
+                1
+                for (row_org, row_project, row_role, _) in self._files
+                if row_org == org_id
+                and row_project == project_id
+                and row_role == role_id
+            )
+            if in_scope >= LIBRARY_MAX_FILES_PER_SCOPE:
+                raise LibraryFileLimitError(LIBRARY_MAX_FILES_PER_SCOPE)
             self._reject_taken_name(org_id, project_id, role_id, name, file_id)
             self._files[self._key(org_id, project_id, role_id, file_id)] = file
         return file

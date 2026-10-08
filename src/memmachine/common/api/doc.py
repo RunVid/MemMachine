@@ -609,8 +609,9 @@ class RouterDoc:
 
     Required fields: `role_id`, `name`, `content`, `description`, and
     `category` (`personal` or `business`).
-    `content` may be Markdown pasted as plain text. At most 50 files are
-    allowed in the same project and role; a further create returns 422.
+    `content` may be Markdown pasted as plain text. At most 20 files are
+    allowed in each category (`personal` and `business`); a further create
+    in a full category returns 422.
     Duplicate names in the same project and role
     return 409 and leave existing files unchanged. Markdown is kept as plain
     text and is not extracted into episodic or semantic memory.
@@ -627,8 +628,9 @@ class RouterDoc:
     Replace the category of one library file.
 
     `id` selects the file. `category` must be `personal` or `business`.
-    The title and body are not changed. If the id does not exist, the request
-    is rejected.
+    The title and body are not changed. Moving into a category that already
+    has 20 files returns 422. If the id does not exist, the request is
+    rejected.
     """
 
     RENAME_LIBRARY = """

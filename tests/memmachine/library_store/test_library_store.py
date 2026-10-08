@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from memmachine.common.api.spec import (
     LIBRARY_CONTENT_MAX_LENGTH,
     LIBRARY_DESCRIPTION_MAX_LENGTH,
-    LIBRARY_MAX_FILES_PER_SCOPE,
+    LIBRARY_MAX_FILES_PER_CATEGORY,
     CreateLibrarySpec,
     LibraryCategory,
     LibraryIdSpec,
@@ -376,6 +376,8 @@ async def _fill_scope(
     org_id: str = "org",
     project_id: str = "project",
     role_id: str = "library",
+    category: str = "personal",
+    name_prefix: str = "file",
 ) -> list[str]:
     ids: list[str] = []
     for i in range(count):
@@ -384,31 +386,42 @@ async def _fill_scope(
             project_id=project_id,
             role_id=role_id,
             file_id=str(uuid4()),
-            name=f"file-{i}",
+            name=f"{name_prefix}-{i}",
             content="body",
             description="summary",
-            category="personal",
+            category=category,
         )
         ids.append(created.id)
     return ids
 
 
 @pytest.mark.asyncio
-async def test_memory_store_rejects_a_fifty_first_file_in_the_same_scope():
+async def test_memory_store_rejects_a_twenty_first_file_in_the_same_category():
     store = InMemoryLibraryStore()
-    ids = await _fill_scope(store, count=LIBRARY_MAX_FILES_PER_SCOPE)
-    assert len(ids) == LIBRARY_MAX_FILES_PER_SCOPE
+    ids = await _fill_scope(store, count=LIBRARY_MAX_FILES_PER_CATEGORY)
+    assert len(ids) == LIBRARY_MAX_FILES_PER_CATEGORY
     with pytest.raises(LibraryFileLimitError):
         await store.create(
             org_id="org",
             project_id="project",
             role_id="library",
             file_id=str(uuid4()),
-            name="file-50",
+            name="file-20",
             content="body",
             description="summary",
             category="personal",
         )
+    business = await store.create(
+        org_id="org",
+        project_id="project",
+        role_id="library",
+        file_id=str(uuid4()),
+        name="biz-0",
+        content="body",
+        description="summary",
+        category="business",
+    )
+    assert business.category == "business"
     await store.create(
         org_id="org",
         project_id="other-project",
@@ -430,16 +443,30 @@ async def test_memory_store_rejects_a_fifty_first_file_in_the_same_scope():
         project_id="project",
         role_id="library",
         file_id=str(uuid4()),
-        name="file-50",
+        name="file-20",
         content="body",
         description="summary",
         category="personal",
     )
-    assert created.name == "file-50"
+    assert created.name == "file-20"
+    await _fill_scope(
+        store,
+        count=LIBRARY_MAX_FILES_PER_CATEGORY - 1,
+        category="business",
+        name_prefix="extra-biz",
+    )
+    with pytest.raises(LibraryFileLimitError):
+        await store.update_category(
+            org_id="org",
+            project_id="project",
+            role_id="library",
+            file_id=created.id,
+            category="business",
+        )
 
 
 @pytest.mark.asyncio
-async def test_sql_store_rejects_a_fifty_first_file_in_the_same_scope():
+async def test_sql_store_rejects_a_twenty_first_file_in_the_same_category():
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
@@ -447,16 +474,26 @@ async def test_sql_store_rejects_a_fifty_first_file_in_the_same_scope():
     )
     store = SqlLibraryStore(engine)
     await store.startup()
-    await _fill_scope(store, count=LIBRARY_MAX_FILES_PER_SCOPE)
+    await _fill_scope(store, count=LIBRARY_MAX_FILES_PER_CATEGORY)
     with pytest.raises(LibraryFileLimitError):
         await store.create(
             org_id="org",
             project_id="project",
             role_id="library",
             file_id=str(uuid4()),
-            name="file-50",
+            name="file-20",
             content="body",
             description="summary",
             category="personal",
         )
+    await store.create(
+        org_id="org",
+        project_id="project",
+        role_id="library",
+        file_id=str(uuid4()),
+        name="biz-0",
+        content="body",
+        description="summary",
+        category="business",
+    )
     await engine.dispose()

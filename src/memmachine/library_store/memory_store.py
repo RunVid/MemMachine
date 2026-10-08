@@ -4,7 +4,7 @@ import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from memmachine.common.api.spec import LIBRARY_MAX_FILES_PER_SCOPE
+from memmachine.common.api.spec import LIBRARY_MAX_FILES_PER_CATEGORY
 from memmachine.common.errors import (
     LibraryFileLimitError,
     LibraryNameExistsError,
@@ -62,15 +62,11 @@ class InMemoryLibraryStore(LibraryStore):
             updated_at=now,
         )
         async with self._lock:
-            in_scope = sum(
-                1
-                for (row_org, row_project, row_role, _) in self._files
-                if row_org == org_id
-                and row_project == project_id
-                and row_role == role_id
+            in_category = self._count_in_category(
+                org_id, project_id, role_id, category
             )
-            if in_scope >= LIBRARY_MAX_FILES_PER_SCOPE:
-                raise LibraryFileLimitError(LIBRARY_MAX_FILES_PER_SCOPE)
+            if in_category >= LIBRARY_MAX_FILES_PER_CATEGORY:
+                raise LibraryFileLimitError(LIBRARY_MAX_FILES_PER_CATEGORY, category)
             self._reject_taken_name(org_id, project_id, role_id, name, file_id)
             self._files[self._key(org_id, project_id, role_id, file_id)] = file
         return file
@@ -111,6 +107,14 @@ class InMemoryLibraryStore(LibraryStore):
             if key is None:
                 raise ResourceNotFoundError(f"Library file '{file_id}' not found")
             current = self._files[key]
+            if current.category != category:
+                in_category = self._count_in_category(
+                    org_id, project_id, role_id, category
+                )
+                if in_category >= LIBRARY_MAX_FILES_PER_CATEGORY:
+                    raise LibraryFileLimitError(
+                        LIBRARY_MAX_FILES_PER_CATEGORY, category
+                    )
             updated = replace(
                 current,
                 category=category,
@@ -201,6 +205,22 @@ class InMemoryLibraryStore(LibraryStore):
                 for key, file in self._files.items()
                 if key[0] != org_id or key[1] != project_id
             }
+
+    def _count_in_category(
+        self,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        category: str,
+    ) -> int:
+        return sum(
+            1
+            for (row_org, row_project, row_role, _), file in self._files.items()
+            if row_org == org_id
+            and row_project == project_id
+            and row_role == role_id
+            and file.category == category
+        )
 
     def _reject_taken_name(
         self,

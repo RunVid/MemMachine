@@ -118,11 +118,13 @@ class LibraryNameExistsError(MemMachineError):
 
 
 class LibraryFileLimitError(MemMachineError):
-    """A project role already has the maximum number of library files."""
+    """A category in this scope already has the maximum number of files."""
 
-    def __init__(self, limit: int) -> None:
-        """Initialize with the per-scope file limit."""
-        super().__init__(f"Library allows at most {limit} files in this scope")
+    def __init__(self, limit: int, category: str) -> None:
+        """Initialize with the per-category file limit."""
+        super().__init__(
+            f"Library allows at most {limit} files in category '{category}'"
+        )
 
 
 class EpisodicMemoryManagerClosedError(MemMachineError):

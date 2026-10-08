@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from memmachine.common.api.spec import LIBRARY_MAX_FILES_PER_SCOPE
+from memmachine.common.api.spec import LIBRARY_MAX_FILES_PER_CATEGORY
 from memmachine.common.errors import (
     LibraryFileLimitError,
     LibraryNameExistsError,
@@ -94,6 +94,26 @@ class SqlLibraryStore:
     def _session(self) -> AsyncSession:
         return self._session_factory()
 
+    def _count_in_category_stmt(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        category: str,
+    ):
+        table = library_entry_table.c
+        return (
+            select(func.count())
+            .select_from(library_entry_table)
+            .where(
+                (table.org_id == org_id)
+                & (table.project_id == project_id)
+                & (table.role_id == role_id)
+                & (table.category == category)
+            )
+        )
+
     def _by_id(
         self,
         org_id: str,
@@ -127,14 +147,11 @@ class SqlLibraryStore:
     ) -> LibraryFile:
         now = datetime.now(UTC)
         table = library_entry_table.c
-        count_stmt = (
-            select(func.count())
-            .select_from(library_entry_table)
-            .where(
-                (table.org_id == org_id)
-                & (table.project_id == project_id)
-                & (table.role_id == role_id)
-            )
+        count_stmt = self._count_in_category_stmt(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            category=category,
         )
         stmt = library_entry_table.insert().values(
             id=file_id,
@@ -151,8 +168,8 @@ class SqlLibraryStore:
         )
         async with self._session() as session:
             count = int((await session.execute(count_stmt)).scalar_one())
-            if count >= LIBRARY_MAX_FILES_PER_SCOPE:
-                raise LibraryFileLimitError(LIBRARY_MAX_FILES_PER_SCOPE)
+            if count >= LIBRARY_MAX_FILES_PER_CATEGORY:
+                raise LibraryFileLimitError(LIBRARY_MAX_FILES_PER_CATEGORY, category)
             try:
                 await session.execute(stmt)
                 await session.commit()
@@ -208,12 +225,30 @@ class SqlLibraryStore:
         category: str,
     ) -> LibraryFile:
         now = datetime.now(UTC)
+        current = await self.get(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            file_id=file_id,
+        )
         stmt = (
             update(library_entry_table)
             .where(self._by_id(org_id, project_id, role_id, file_id))
             .values(category=category, updated_at=now)
         )
         async with self._session() as session:
+            if current.category != category:
+                count_stmt = self._count_in_category_stmt(
+                    org_id=org_id,
+                    project_id=project_id,
+                    role_id=role_id,
+                    category=category,
+                )
+                count = int((await session.execute(count_stmt)).scalar_one())
+                if count >= LIBRARY_MAX_FILES_PER_CATEGORY:
+                    raise LibraryFileLimitError(
+                        LIBRARY_MAX_FILES_PER_CATEGORY, category
+                    )
             result = await session.execute(stmt)
             if _result_rowcount(result) == 0:
                 await session.rollback()

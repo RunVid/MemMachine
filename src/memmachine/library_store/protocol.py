@@ -36,6 +36,17 @@ class LibraryStore(Protocol):
     ) -> LibraryFile:
         """Replace the body. The title stays the same."""
 
+    async def update_category(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        file_id: str,
+        category: str,
+    ) -> LibraryFile:
+        """Replace the category. The title and body stay the same."""
+
     async def rename(
         self,
         *,

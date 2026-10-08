@@ -36,6 +36,7 @@ from memmachine.common.api.spec import (
     SearchMemoriesSpec,
     SearchResult,
     SemanticIsolation,
+    UpdateLibraryCategorySpec,
     UpdateLibraryContentSpec,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
@@ -892,6 +893,34 @@ class Memory:
         response = self.client.request(
             "POST",
             f"{self.client.base_url}/api/v2/memories/library/content",
+            json=spec.model_dump(mode="json"),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return LibraryFileResponse(**response.json())
+
+    def update_library_category(
+        self,
+        *,
+        file_id: str,
+        category: str,
+        role_id: str = "",
+        timeout: int | None = None,
+    ) -> LibraryFileResponse:
+        """Replace the category. The title and body stay the same."""
+        if self._client_closed:
+            raise RuntimeError("Cannot update library category: client has been closed")
+
+        spec = UpdateLibraryCategorySpec(
+            org_id=self.__org_id,
+            project_id=self.__project_id,
+            role_id=self._require_role_id(role_id),
+            id=file_id,
+            category=category,
+        )
+        response = self.client.request(
+            "POST",
+            f"{self.client.base_url}/api/v2/memories/library/category",
             json=spec.model_dump(mode="json"),
             timeout=timeout,
         )

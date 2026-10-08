@@ -35,6 +35,7 @@ from memmachine.common.api.spec import (
     SearchResultContent,
     SemanticFeature,
     SemanticIsolation,
+    UpdateLibraryCategorySpec,
     UpdateLibraryContentSpec,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
@@ -522,6 +523,20 @@ async def _update_library_content(
         role_id=spec.role_id,
         file_id=spec.id,
         content=spec.content,
+    )
+    return _library_file(file)
+
+
+async def _update_library_category(
+    spec: UpdateLibraryCategorySpec,
+    memmachine: MemMachine,
+) -> LibraryFileResponse:
+    file = await memmachine.update_library_category(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        role_id=spec.role_id,
+        file_id=spec.id,
+        category=spec.category,
     )
     return _library_file(file)
 

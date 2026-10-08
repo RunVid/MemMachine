@@ -775,6 +775,25 @@ class MemMachine:
             content=content,
         )
 
+    async def update_library_category(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        file_id: str,
+        category: str,
+    ) -> LibraryFile:
+        """Replace the category. The title and body stay the same."""
+        store = await self._library_store()
+        return await store.update_category(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            file_id=file_id,
+            category=category,
+        )
+
     async def rename_library(
         self,
         *,

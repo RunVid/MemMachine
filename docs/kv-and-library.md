@@ -101,7 +101,7 @@ The body is stored as written, including Markdown. It is plain text. The maximum
 
 **Create requires `name`, `content`, `description`, and `category`.** Send the title, body, one-line summary, and category. `category` must be `personal` or `business`. The body may be Markdown pasted as plain text (stored as written). Titles are unique for that project and role. If the same title already exists, create returns **409** and nothing is written. MemMachine does not rename files or add numeric suffixes. One project and role may hold at most **50** files; a 51st create returns **422**.
 
-**`description`** is a single line, at most 512 characters. **`category`** is stored as written at create and is not changed by rename or replace-body.
+**`description`** is a single line, at most 512 characters. **`category`** is `personal` or `business`. Change it with `POST /api/v2/memories/library/category`.
 
 ```python
 created = memory.create_library(
@@ -114,6 +114,11 @@ created = memory.create_library(
 memory.update_library_content(
     file_id=created.id,
     content="Updated body",
+    role_id="library",
+)
+memory.update_library_category(
+    file_id=created.id,
+    category="personal",
     role_id="library",
 )
 memory.rename_library(
@@ -130,6 +135,7 @@ memory.list_library(role_id="library")
 |---|---|---|---|
 | Create | `POST /api/v2/memories/library` | 201, returns `id`, title, body, description, and category | Missing or invalid fields (including `category` not `personal`/`business`), or 50 files already in this scope: 422. Title already exists: 409 |
 | Replace body | `POST /api/v2/memories/library/content` | 200, title unchanged | Unknown `id`: 404, no file is created |
+| Replace category | `POST /api/v2/memories/library/category` | 200, title and body unchanged | Unknown `id`: 404. Invalid category: 422 |
 | Rename | `POST /api/v2/memories/library/rename` | 200, `id` unchanged | Unknown `id`: 404. Title already exists: 409, previous title kept |
 | Delete | `POST /api/v2/memories/library/delete` | 204 | A missing `id` still returns 204 |
 | Read | `POST /api/v2/memories/library/get` | 200, returns `name`, `content`, `description`, and `category` | Unknown `id`: 404 |

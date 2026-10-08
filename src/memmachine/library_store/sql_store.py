@@ -198,6 +198,34 @@ class SqlLibraryStore:
             file_id=file_id,
         )
 
+    async def update_category(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        file_id: str,
+        category: str,
+    ) -> LibraryFile:
+        now = datetime.now(UTC)
+        stmt = (
+            update(library_entry_table)
+            .where(self._by_id(org_id, project_id, role_id, file_id))
+            .values(category=category, updated_at=now)
+        )
+        async with self._session() as session:
+            result = await session.execute(stmt)
+            if _result_rowcount(result) == 0:
+                await session.rollback()
+                raise _missing(file_id)
+            await session.commit()
+        return await self.get(
+            org_id=org_id,
+            project_id=project_id,
+            role_id=role_id,
+            file_id=file_id,
+        )
+
     async def rename(
         self,
         *,

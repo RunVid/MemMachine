@@ -623,6 +623,14 @@ class RouterDoc:
     the request is rejected and no file is created.
     """
 
+    UPDATE_LIBRARY_CATEGORY = """
+    Replace the category of one library file.
+
+    `id` selects the file. `category` must be `personal` or `business`.
+    The title and body are not changed. If the id does not exist, the request
+    is rejected.
+    """
+
     RENAME_LIBRARY = """
     Replace the display name of one library file.
 

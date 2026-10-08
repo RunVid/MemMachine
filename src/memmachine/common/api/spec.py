@@ -1316,6 +1316,24 @@ class UpdateLibraryContentSpec(_LibraryIdSpec):
         return _library_content(value)
 
 
+class UpdateLibraryCategorySpec(_LibraryIdSpec):
+    """Replace the category. The id stays the same."""
+
+    category: Annotated[
+        LibraryCategory,
+        Field(
+            ...,
+            description=SpecDoc.LIBRARY_CATEGORY,
+            examples=Examples.LIBRARY_CATEGORY,
+        ),
+    ]
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def validate_category(cls, value: object) -> LibraryCategory:
+        return _library_category(value)
+
+
 class RenameLibrarySpec(_LibraryIdSpec):
     """Replace the display name. The id stays the same."""
 

@@ -97,6 +97,28 @@ class InMemoryLibraryStore(LibraryStore):
             self._files[key] = updated
         return updated
 
+    async def update_category(
+        self,
+        *,
+        org_id: str,
+        project_id: str,
+        role_id: str,
+        file_id: str,
+        category: str,
+    ) -> LibraryFile:
+        async with self._lock:
+            key = self._find(org_id, project_id, role_id, file_id)
+            if key is None:
+                raise ResourceNotFoundError(f"Library file '{file_id}' not found")
+            current = self._files[key]
+            updated = replace(
+                current,
+                category=category,
+                updated_at=datetime.now(UTC),
+            )
+            self._files[key] = updated
+        return updated
+
     async def rename(
         self,
         *,

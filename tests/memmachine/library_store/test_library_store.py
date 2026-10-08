@@ -14,6 +14,7 @@ from memmachine.common.api.spec import (
     CreateLibrarySpec,
     LibraryCategory,
     LibraryIdSpec,
+    UpdateLibraryCategorySpec,
 )
 from memmachine.common.errors import (
     LibraryFileLimitError,
@@ -118,6 +119,25 @@ def test_create_spec_requires_name_and_validates_fields():
     assert spec.category == LibraryCategory.PERSONAL
 
 
+def test_update_category_spec_requires_personal_or_business():
+    spec = UpdateLibraryCategorySpec(
+        org_id="org",
+        project_id="project",
+        role_id="library",
+        id=str(uuid4()),
+        category=" BUSINESS ",
+    )
+    assert spec.category == LibraryCategory.BUSINESS
+    with pytest.raises(ValidationError):
+        UpdateLibraryCategorySpec(
+            org_id="org",
+            project_id="project",
+            role_id="library",
+            id=str(uuid4()),
+            category="work",
+        )
+
+
 def test_id_spec_requires_a_uuid():
     LibraryIdSpec(
         org_id="org",
@@ -191,6 +211,16 @@ async def test_memory_store_keeps_id_when_content_and_title_change():
     assert updated.id == file_id
     assert updated.name == "服务范围"
     assert updated.content.startswith("# revised")
+    recategorized = await store.update_category(
+        org_id="org",
+        project_id="project",
+        role_id="library",
+        file_id=file_id,
+        category="business",
+    )
+    assert recategorized.id == file_id
+    assert recategorized.name == "服务范围"
+    assert recategorized.category == "business"
     renamed = await store.rename(
         org_id="org",
         project_id="project",
@@ -207,7 +237,7 @@ async def test_memory_store_keeps_id_when_content_and_title_change():
     assert listed[0].id == file_id
     assert listed[0].name == "营业时间"
     assert listed[0].description == "One-line summary"
-    assert listed[0].category == "personal"
+    assert listed[0].category == "business"
 
 
 @pytest.mark.asyncio
@@ -249,6 +279,14 @@ async def test_memory_store_missing_id_and_repeat_delete():
             project_id="project",
             role_id="library",
             file_id=missing,
+        )
+    with pytest.raises(ResourceNotFoundError):
+        await store.update_category(
+            org_id="org",
+            project_id="project",
+            role_id="library",
+            file_id=missing,
+            category="business",
         )
     await store.delete(
         org_id="org",
@@ -292,6 +330,15 @@ async def test_sql_store_uses_id_and_rejects_a_duplicate_title():
     )
     assert updated.id == file_id
     assert updated.name == "服务范围"
+    recategorized = await store.update_category(
+        org_id="org",
+        project_id="project",
+        role_id="library",
+        file_id=file_id,
+        category="business",
+    )
+    assert recategorized.category == "business"
+    assert recategorized.name == "服务范围"
     renamed = await store.rename(
         org_id="org",
         project_id="project",

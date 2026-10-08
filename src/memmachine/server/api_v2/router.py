@@ -39,6 +39,7 @@ from memmachine.common.api.spec import (
     RestErrorModel,
     SearchMemoriesSpec,
     SearchResult,
+    UpdateLibraryCategorySpec,
     UpdateLibraryContentSpec,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
@@ -71,6 +72,7 @@ from memmachine.server.api_v2.service import (
     _rename_library,
     _search_target_memories,
     _SessionData,
+    _update_library_category,
     _update_library_content,
     _write_semantic_memory,
     get_memmachine,
@@ -501,6 +503,21 @@ async def update_library_content(
         return await _update_library_content(spec=spec, memmachine=memmachine)
     except Exception as e:
         raise _library_error(e, action="update library file") from e
+
+
+@router.post(
+    "/memories/library/category",
+    description=RouterDoc.UPDATE_LIBRARY_CATEGORY,
+)
+async def update_library_category(
+    spec: UpdateLibraryCategorySpec,
+    memmachine: Annotated[MemMachine, Depends(get_memmachine)],
+) -> LibraryFileResponse:
+    """Replace the category of one library file."""
+    try:
+        return await _update_library_category(spec=spec, memmachine=memmachine)
+    except Exception as e:
+        raise _library_error(e, action="update library category") from e
 
 
 @router.post("/memories/library/rename", description=RouterDoc.RENAME_LIBRARY)

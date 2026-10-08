@@ -93,54 +93,45 @@ memory.get_kv(key="+14155550142", role_id="call_log", limit=5)
 
 Write the call here. `POST /api/v2/memories` would run extraction and can put the caller's phone and name into the user profile.
 
-## 4. Library
+## 4. Library — backend
 
-Use this for a document the user files. `role_id` is `library`. MemMachine assigns an `id` at create time. The title is a display name and is unique for that project and role. Read, replace the body, rename, and delete all use the `id`.
+MemMachine stores the file. The backend owns the file page and all writes. Scope is `org_id` + `project_id` + `role_id` (`library`).
 
-The body is stored as written, including Markdown. It is plain text. The maximum length is 40000 characters. It is not extracted and it is not searchable.
+Library is **not** memory search and **not** semantic extraction. Do not send these documents through `POST /api/v2/memories`.
 
-**Create requires `name`, `content`, `description`, and `category`.** Send the title, body, one-line summary, and category. `category` must be `personal` or `business`. The body may be Markdown pasted as plain text (stored as written). Titles are unique for that project and role. If the same title already exists, create returns **409** and nothing is written. MemMachine does not rename files or add numeric suffixes. Each category (`personal` and `business`) may hold at most **20** files in one project and role; a 21st create in that category returns **422**. A full `business` bucket does not block a new `personal` file.
+There is no `always_loaded`. Do not send it.
 
-**`description`** is a single line, at most 512 characters. **`category`** is `personal` or `business`. Change it with `POST /api/v2/memories/library/category`.
+### Writes (backend only)
 
-```python
-created = memory.create_library(
-    content="# Service area\n\nWeekday coverage for the office and the lobby.",
-    name="Service area",
-    description="Weekday lobby and office coverage",
-    category="business",
-    role_id="library",
-)
-memory.update_library_content(
-    file_id=created.id,
-    content="Updated body",
-    role_id="library",
-)
-memory.update_library_category(
-    file_id=created.id,
-    category="personal",
-    role_id="library",
-)
-memory.rename_library(
-    file_id=created.id,
-    name="Business hours",
-    role_id="library",
-)
-memory.get_library(file_id=created.id, role_id="library")
-memory.delete_library(file_id=created.id, role_id="library")
-memory.list_library(role_id="library")
-```
+| | Path | Body | Success | Failure |
+|---|---|---|---|---|
+| Create | `POST /api/v2/memories/library` | `org_id`, `project_id`, `role_id`, `name`, `content`, `description`, `category` | **201**, full file + `id` | 422 invalid or category full; **409** title taken |
+| Update | `POST /api/v2/memories/library/update` | `org_id`, `project_id`, `role_id`, `id`, `name`, `content`, `description` | **200**, same `id` and `category` | **404** unknown id; 422 invalid; **409** title taken |
+| Delete | `POST /api/v2/memories/library/delete` | `org_id`, `project_id`, `role_id`, `id` | **204** | missing id is still 204 |
 
-| Operation | Path | Success | Failure |
-|---|---|---|---|
-| Create | `POST /api/v2/memories/library` | 201, returns `id`, title, body, description, and category | Missing or invalid fields (including `category` not `personal`/`business`), or 20 files already in that category: 422. Title already exists: 409 |
-| Replace body | `POST /api/v2/memories/library/content` | 200, title unchanged | Unknown `id`: 404, no file is created |
-| Replace category | `POST /api/v2/memories/library/category` | 200, title and body unchanged | Unknown `id`: 404. Invalid category, or target category already has 20 files: 422 |
-| Rename | `POST /api/v2/memories/library/rename` | 200, `id` unchanged | Unknown `id`: 404. Title already exists: 409, previous title kept |
-| Delete | `POST /api/v2/memories/library/delete` | 204 | A missing `id` still returns 204 |
-| Read | `POST /api/v2/memories/library/get` | 200, returns `name`, `content`, `description`, and `category` | Unknown `id`: 404 |
-| List | `POST /api/v2/memories/library/list` | 200, each file has `id`, `name`, `description`, `category`, `updated_at` | No files: `files` is `[]` |
+Update overwrites title, body, and summary in one call. Send all three every time. Category cannot be changed after create.
 
-List entries are `id`, `name`, `description`, `category`, and `updated_at`. They do not include the body.
+Removed (do not call): `/library/content`, `/library/rename`, `/library/category`, `/library/description`, `/library/always_loaded`.
 
-The file page collects title, Markdown body, one-line summary, and category (`personal` or `business`), then creates with those fields. On 409, prompt for a different title. Replace, rename, and delete use the returned `id`. Facts about the user still go through normal memory. The assistant can call list once per turn to show each file's title, category, and summary in tool text, then call get with `id` only when it needs the Markdown body.
+### Fields
+
+| Field | Rules |
+|---|---|
+| `id` | UUID from create. Use it for update, get, delete. |
+| `name` | Display title. Unique in this project + role. Max 256. Trimmed. MemMachine does not add suffixes. |
+| `content` | Markdown stored as plain text. Required, max 40000. |
+| `description` | One line, required, max 512, no newlines. |
+| `category` | `personal` or `business`, **create only**. 20 files per category per project + role. |
+
+On 409, ask the user for a different title. Nothing was written.
+
+### Reads
+
+| | Path | Returns |
+|---|---|---|
+| List | `POST /api/v2/memories/library/list` | `files`: `id`, `name`, `description`, `category`, `updated_at`. No body. Empty is `[]`. |
+| Get | `POST /api/v2/memories/library/get` | `id`, `name`, `content`, `description`, `category`, `created_at`, `updated_at`. Unknown id: **404**. |
+
+### Agent
+
+Agent **does not write**. Read path is unchanged: list once per turn (title, category, summary); get by `id` only when the body is needed. If a client typed `always_loaded` as required, drop that field.

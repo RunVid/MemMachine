@@ -168,16 +168,14 @@ class SpecDoc:
     Required one-line summary for the file. Single line, at most 512 characters."""
 
     LIBRARY_CATEGORY = """
-    Required file category. Must be personal or business."""
-
-    LIBRARY_ALWAYS_LOADED = """
-    Reserved for future use. New files are stored as false. Not used yet."""
+    Required file category at create time. Must be personal or business.
+    It cannot be changed later."""
 
     LIBRARY_CREATED_AT = """
     UTC time when this file was created."""
 
     LIBRARY_UPDATED_AT = """
-    UTC time when this file's body was last replaced."""
+    UTC time when this file's title, body, or summary was last overwritten."""
 
     LIBRARY_FILES = """
     File ids, titles, categories, one-line summaries, and update times. Bodies
@@ -608,7 +606,7 @@ class RouterDoc:
     Store one document for one role.
 
     Required fields: `role_id`, `name`, `content`, `description`, and
-    `category` (`personal` or `business`).
+    `category` (`personal` or `business`). Category is fixed after create.
     `content` may be Markdown pasted as plain text. At most 20 files are
     allowed in each category (`personal` and `business`); a further create
     in a full category returns 422.
@@ -617,27 +615,14 @@ class RouterDoc:
     text and is not extracted into episodic or semantic memory.
     """
 
-    UPDATE_LIBRARY_CONTENT = """
-    Replace the body of one library file.
+    UPDATE_LIBRARY = """
+    Overwrite the title, body, and summary of one library file.
 
-    `id` selects the file. The title is not changed. If the id does not exist,
-    the request is rejected and no file is created.
-    """
-
-    UPDATE_LIBRARY_CATEGORY = """
-    Replace the category of one library file.
-
-    `id` selects the file. `category` must be `personal` or `business`.
-    The title and body are not changed. Moving into a category that already
-    has 20 files returns 422. If the id does not exist, the request is
-    rejected.
-    """
-
-    RENAME_LIBRARY = """
-    Replace the display name of one library file.
-
-    The id stays the same. If the new name is already used in this project and
-    role, the request is rejected and the current title is left unchanged.
+    Required fields: `id`, `name`, `content`, and `description`. Category is
+    not changed. Length rules match create. If the new
+    title is already used in this project and role, the request returns 409
+    and the previous file is left unchanged. If the id does not exist, the
+    request is rejected.
     """
 
     DELETE_LIBRARY = """

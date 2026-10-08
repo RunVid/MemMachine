@@ -3,7 +3,6 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import (
-    Boolean,
     Column,
     ColumnElement,
     DateTime,
@@ -12,7 +11,6 @@ from sqlalchemy import (
     Table,
     UniqueConstraint,
     delete,
-    false,
     func,
     select,
     update,
@@ -49,7 +47,6 @@ library_entry_table = Table(
     Column("content", String, nullable=False),
     Column("description", String, nullable=False, server_default=""),
     Column("category", String, nullable=False),
-    Column("always_loaded", Boolean, nullable=False, server_default=false()),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     UniqueConstraint(
@@ -70,7 +67,6 @@ def _file_from_mapping(mapping: object) -> LibraryFile:
         content=str(row["content"]),
         description=str(row.get("description", "") or ""),
         category=str(row["category"]),
-        always_loaded=bool(row.get("always_loaded", False)),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -162,7 +158,6 @@ class SqlLibraryStore:
             content=content,
             description=description,
             category=category,
-            always_loaded=False,
             created_at=now,
             updated_at=now,
         )
@@ -182,86 +177,11 @@ class SqlLibraryStore:
             content=content,
             description=description,
             category=category,
-            always_loaded=False,
             created_at=now,
             updated_at=now,
         )
 
-    async def update_content(
-        self,
-        *,
-        org_id: str,
-        project_id: str,
-        role_id: str,
-        file_id: str,
-        content: str,
-    ) -> LibraryFile:
-        now = datetime.now(UTC)
-        stmt = (
-            update(library_entry_table)
-            .where(self._by_id(org_id, project_id, role_id, file_id))
-            .values(content=content, updated_at=now)
-        )
-        async with self._session() as session:
-            result = await session.execute(stmt)
-            if _result_rowcount(result) == 0:
-                await session.rollback()
-                raise _missing(file_id)
-            await session.commit()
-        return await self.get(
-            org_id=org_id,
-            project_id=project_id,
-            role_id=role_id,
-            file_id=file_id,
-        )
-
-    async def update_category(
-        self,
-        *,
-        org_id: str,
-        project_id: str,
-        role_id: str,
-        file_id: str,
-        category: str,
-    ) -> LibraryFile:
-        now = datetime.now(UTC)
-        current = await self.get(
-            org_id=org_id,
-            project_id=project_id,
-            role_id=role_id,
-            file_id=file_id,
-        )
-        stmt = (
-            update(library_entry_table)
-            .where(self._by_id(org_id, project_id, role_id, file_id))
-            .values(category=category, updated_at=now)
-        )
-        async with self._session() as session:
-            if current.category != category:
-                count_stmt = self._count_in_category_stmt(
-                    org_id=org_id,
-                    project_id=project_id,
-                    role_id=role_id,
-                    category=category,
-                )
-                count = int((await session.execute(count_stmt)).scalar_one())
-                if count >= LIBRARY_MAX_FILES_PER_CATEGORY:
-                    raise LibraryFileLimitError(
-                        LIBRARY_MAX_FILES_PER_CATEGORY, category
-                    )
-            result = await session.execute(stmt)
-            if _result_rowcount(result) == 0:
-                await session.rollback()
-                raise _missing(file_id)
-            await session.commit()
-        return await self.get(
-            org_id=org_id,
-            project_id=project_id,
-            role_id=role_id,
-            file_id=file_id,
-        )
-
-    async def rename(
+    async def update(
         self,
         *,
         org_id: str,
@@ -269,12 +189,19 @@ class SqlLibraryStore:
         role_id: str,
         file_id: str,
         name: str,
+        content: str,
+        description: str,
     ) -> LibraryFile:
         now = datetime.now(UTC)
         stmt = (
             update(library_entry_table)
             .where(self._by_id(org_id, project_id, role_id, file_id))
-            .values(name=name, updated_at=now)
+            .values(
+                name=name,
+                content=content,
+                description=description,
+                updated_at=now,
+            )
         )
         async with self._session() as session:
             try:

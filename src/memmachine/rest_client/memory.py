@@ -32,12 +32,10 @@ from memmachine.common.api.spec import (
     ListMemoriesSpec,
     ListResult,
     MemoryMessage,
-    RenameLibrarySpec,
     SearchMemoriesSpec,
     SearchResult,
     SemanticIsolation,
-    UpdateLibraryCategorySpec,
-    UpdateLibraryContentSpec,
+    UpdateLibrarySpec,
     _library_category,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
@@ -872,84 +870,32 @@ class Memory:
         response.raise_for_status()
         return LibraryFileResponse(**response.json())
 
-    def update_library_content(
-        self,
-        *,
-        file_id: str,
-        content: str,
-        role_id: str = "",
-        timeout: int | None = None,
-    ) -> LibraryFileResponse:
-        """Replace the body of one library file. The title stays the same."""
-        if self._client_closed:
-            raise RuntimeError("Cannot update library file: client has been closed")
-
-        spec = UpdateLibraryContentSpec(
-            org_id=self.__org_id,
-            project_id=self.__project_id,
-            role_id=self._require_role_id(role_id),
-            id=file_id,
-            content=content,
-        )
-        response = self.client.request(
-            "POST",
-            f"{self.client.base_url}/api/v2/memories/library/content",
-            json=spec.model_dump(mode="json"),
-            timeout=timeout,
-        )
-        response.raise_for_status()
-        return LibraryFileResponse(**response.json())
-
-    def update_library_category(
-        self,
-        *,
-        file_id: str,
-        category: str,
-        role_id: str = "",
-        timeout: int | None = None,
-    ) -> LibraryFileResponse:
-        """Replace the category. The title and body stay the same."""
-        if self._client_closed:
-            raise RuntimeError("Cannot update library category: client has been closed")
-
-        spec = UpdateLibraryCategorySpec(
-            org_id=self.__org_id,
-            project_id=self.__project_id,
-            role_id=self._require_role_id(role_id),
-            id=file_id,
-            category=_library_category(category),
-        )
-        response = self.client.request(
-            "POST",
-            f"{self.client.base_url}/api/v2/memories/library/category",
-            json=spec.model_dump(mode="json"),
-            timeout=timeout,
-        )
-        response.raise_for_status()
-        return LibraryFileResponse(**response.json())
-
-    def rename_library(
+    def update_library(
         self,
         *,
         file_id: str,
         name: str,
+        content: str,
+        description: str,
         role_id: str = "",
         timeout: int | None = None,
     ) -> LibraryFileResponse:
-        """Replace the display name. The id stays the same."""
+        """Overwrite title, body, and summary. Category is not changed."""
         if self._client_closed:
-            raise RuntimeError("Cannot rename library file: client has been closed")
+            raise RuntimeError("Cannot update library file: client has been closed")
 
-        spec = RenameLibrarySpec(
+        spec = UpdateLibrarySpec(
             org_id=self.__org_id,
             project_id=self.__project_id,
             role_id=self._require_role_id(role_id),
             id=file_id,
             name=name,
+            content=content,
+            description=description,
         )
         response = self.client.request(
             "POST",
-            f"{self.client.base_url}/api/v2/memories/library/rename",
+            f"{self.client.base_url}/api/v2/memories/library/update",
             json=spec.model_dump(mode="json"),
             timeout=timeout,
         )

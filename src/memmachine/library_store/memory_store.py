@@ -57,7 +57,6 @@ class InMemoryLibraryStore(LibraryStore):
             content=content,
             description=description,
             category=category,
-            always_loaded=False,
             created_at=now,
             updated_at=now,
         )
@@ -71,59 +70,7 @@ class InMemoryLibraryStore(LibraryStore):
             self._files[self._key(org_id, project_id, role_id, file_id)] = file
         return file
 
-    async def update_content(
-        self,
-        *,
-        org_id: str,
-        project_id: str,
-        role_id: str,
-        file_id: str,
-        content: str,
-    ) -> LibraryFile:
-        async with self._lock:
-            key = self._find(org_id, project_id, role_id, file_id)
-            if key is None:
-                raise ResourceNotFoundError(f"Library file '{file_id}' not found")
-            current = self._files[key]
-            updated = replace(
-                current,
-                content=content,
-                updated_at=datetime.now(UTC),
-            )
-            self._files[key] = updated
-        return updated
-
-    async def update_category(
-        self,
-        *,
-        org_id: str,
-        project_id: str,
-        role_id: str,
-        file_id: str,
-        category: str,
-    ) -> LibraryFile:
-        async with self._lock:
-            key = self._find(org_id, project_id, role_id, file_id)
-            if key is None:
-                raise ResourceNotFoundError(f"Library file '{file_id}' not found")
-            current = self._files[key]
-            if current.category != category:
-                in_category = self._count_in_category(
-                    org_id, project_id, role_id, category
-                )
-                if in_category >= LIBRARY_MAX_FILES_PER_CATEGORY:
-                    raise LibraryFileLimitError(
-                        LIBRARY_MAX_FILES_PER_CATEGORY, category
-                    )
-            updated = replace(
-                current,
-                category=category,
-                updated_at=datetime.now(UTC),
-            )
-            self._files[key] = updated
-        return updated
-
-    async def rename(
+    async def update(
         self,
         *,
         org_id: str,
@@ -131,6 +78,8 @@ class InMemoryLibraryStore(LibraryStore):
         role_id: str,
         file_id: str,
         name: str,
+        content: str,
+        description: str,
     ) -> LibraryFile:
         async with self._lock:
             key = self._find(org_id, project_id, role_id, file_id)
@@ -142,6 +91,8 @@ class InMemoryLibraryStore(LibraryStore):
             updated = replace(
                 current,
                 name=name,
+                content=content,
+                description=description,
                 updated_at=datetime.now(UTC),
             )
             self._files[key] = updated

@@ -1298,9 +1298,13 @@ class _LibraryIdSpec(_WithOrgAndProj):
         return _library_id(value)
 
 
-class UpdateLibraryContentSpec(_LibraryIdSpec):
-    """Replace the body of one file. The title stays the same."""
+class UpdateLibrarySpec(_LibraryIdSpec):
+    """Overwrite title, body, and summary. Category is not changed."""
 
+    name: Annotated[
+        str,
+        Field(..., description=SpecDoc.LIBRARY_NAME, examples=Examples.LIBRARY_NAME),
+    ]
     content: Annotated[
         str,
         Field(
@@ -1309,43 +1313,29 @@ class UpdateLibraryContentSpec(_LibraryIdSpec):
             examples=Examples.LIBRARY_CONTENT,
         ),
     ]
-
-    @field_validator("content")
-    @classmethod
-    def validate_content(cls, value: str) -> str:
-        return _library_content(value)
-
-
-class UpdateLibraryCategorySpec(_LibraryIdSpec):
-    """Replace the category. The id stays the same."""
-
-    category: Annotated[
-        LibraryCategory,
+    description: Annotated[
+        str,
         Field(
             ...,
-            description=SpecDoc.LIBRARY_CATEGORY,
-            examples=Examples.LIBRARY_CATEGORY,
+            description=SpecDoc.LIBRARY_DESCRIPTION,
+            examples=Examples.LIBRARY_DESCRIPTION,
         ),
-    ]
-
-    @field_validator("category", mode="before")
-    @classmethod
-    def validate_category(cls, value: object) -> LibraryCategory:
-        return _library_category(value)
-
-
-class RenameLibrarySpec(_LibraryIdSpec):
-    """Replace the display name. The id stays the same."""
-
-    name: Annotated[
-        str,
-        Field(..., description=SpecDoc.LIBRARY_NAME, examples=Examples.LIBRARY_NAME),
     ]
 
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
         return _library_name(value)
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        return _library_content(value)
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        return _library_description(value)
 
 
 class LibraryIdSpec(_LibraryIdSpec):
@@ -1376,10 +1366,6 @@ class LibraryFileResponse(BaseModel):
     category: Annotated[
         LibraryCategory,
         Field(..., description=SpecDoc.LIBRARY_CATEGORY),
-    ]
-    always_loaded: Annotated[
-        bool,
-        Field(..., description=SpecDoc.LIBRARY_ALWAYS_LOADED),
     ]
     created_at: Annotated[
         AwareDatetime,

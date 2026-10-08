@@ -25,29 +25,7 @@ class LibraryStore(Protocol):
     ) -> LibraryFile:
         """Insert a finished document. The title must be free in this scope."""
 
-    async def update_content(
-        self,
-        *,
-        org_id: str,
-        project_id: str,
-        role_id: str,
-        file_id: str,
-        content: str,
-    ) -> LibraryFile:
-        """Replace the body. The title stays the same."""
-
-    async def update_category(
-        self,
-        *,
-        org_id: str,
-        project_id: str,
-        role_id: str,
-        file_id: str,
-        category: str,
-    ) -> LibraryFile:
-        """Replace the category. The title and body stay the same."""
-
-    async def rename(
+    async def update(
         self,
         *,
         org_id: str,
@@ -55,8 +33,10 @@ class LibraryStore(Protocol):
         role_id: str,
         file_id: str,
         name: str,
+        content: str,
+        description: str,
     ) -> LibraryFile:
-        """Replace the title. A taken title is left unchanged."""
+        """Overwrite title, body, and summary. Category is not changed."""
 
     async def get(
         self,

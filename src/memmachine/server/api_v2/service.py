@@ -29,14 +29,12 @@ from memmachine.common.api.spec import (
     ListMemoriesSpec,
     ListResult,
     ListResultContent,
-    RenameLibrarySpec,
     SearchMemoriesSpec,
     SearchResult,
     SearchResultContent,
     SemanticFeature,
     SemanticIsolation,
-    UpdateLibraryCategorySpec,
-    UpdateLibraryContentSpec,
+    UpdateLibrarySpec,
     _library_category,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
@@ -482,7 +480,6 @@ def _library_file(file: LibraryFile) -> LibraryFileResponse:
         content=file.content,
         description=file.description,
         category=_library_category(file.category),
-        always_loaded=file.always_loaded,
         created_at=file.created_at,
         updated_at=file.updated_at,
     )
@@ -514,44 +511,18 @@ async def _create_library(
     return _library_file(file)
 
 
-async def _update_library_content(
-    spec: UpdateLibraryContentSpec,
+async def _update_library(
+    spec: UpdateLibrarySpec,
     memmachine: MemMachine,
 ) -> LibraryFileResponse:
-    file = await memmachine.update_library_content(
-        org_id=spec.org_id,
-        project_id=spec.project_id,
-        role_id=spec.role_id,
-        file_id=spec.id,
-        content=spec.content,
-    )
-    return _library_file(file)
-
-
-async def _update_library_category(
-    spec: UpdateLibraryCategorySpec,
-    memmachine: MemMachine,
-) -> LibraryFileResponse:
-    file = await memmachine.update_library_category(
-        org_id=spec.org_id,
-        project_id=spec.project_id,
-        role_id=spec.role_id,
-        file_id=spec.id,
-        category=spec.category,
-    )
-    return _library_file(file)
-
-
-async def _rename_library(
-    spec: RenameLibrarySpec,
-    memmachine: MemMachine,
-) -> LibraryFileResponse:
-    file = await memmachine.rename_library(
+    file = await memmachine.update_library(
         org_id=spec.org_id,
         project_id=spec.project_id,
         role_id=spec.role_id,
         file_id=spec.id,
         name=spec.name,
+        content=spec.content,
+        description=spec.description,
     )
     return _library_file(file)
 

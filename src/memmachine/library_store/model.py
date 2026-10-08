@@ -13,7 +13,6 @@ class LibraryFile:
     content: str
     description: str
     category: str
-    always_loaded: bool
     created_at: datetime
     updated_at: datetime
 

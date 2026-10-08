@@ -756,45 +756,7 @@ class MemMachine:
             category=category,
         )
 
-    async def update_library_content(
-        self,
-        *,
-        org_id: str,
-        project_id: str,
-        role_id: str,
-        file_id: str,
-        content: str,
-    ) -> LibraryFile:
-        """Replace the body of one library file. The title stays the same."""
-        store = await self._library_store()
-        return await store.update_content(
-            org_id=org_id,
-            project_id=project_id,
-            role_id=role_id,
-            file_id=file_id,
-            content=content,
-        )
-
-    async def update_library_category(
-        self,
-        *,
-        org_id: str,
-        project_id: str,
-        role_id: str,
-        file_id: str,
-        category: str,
-    ) -> LibraryFile:
-        """Replace the category. The title and body stay the same."""
-        store = await self._library_store()
-        return await store.update_category(
-            org_id=org_id,
-            project_id=project_id,
-            role_id=role_id,
-            file_id=file_id,
-            category=category,
-        )
-
-    async def rename_library(
+    async def update_library(
         self,
         *,
         org_id: str,
@@ -802,15 +764,19 @@ class MemMachine:
         role_id: str,
         file_id: str,
         name: str,
+        content: str,
+        description: str,
     ) -> LibraryFile:
-        """Replace the title. The id stays the same."""
+        """Overwrite title, body, and summary. Category is not changed."""
         store = await self._library_store()
-        return await store.rename(
+        return await store.update(
             org_id=org_id,
             project_id=project_id,
             role_id=role_id,
             file_id=file_id,
             name=name,
+            content=content,
+            description=description,
         )
 
     async def get_library(

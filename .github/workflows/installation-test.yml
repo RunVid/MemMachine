@@ -11,9 +11,8 @@ concurrency:
   cancel-in-progress: ${{ (github.event.pull_request.head.ref || github.ref) != 'refs/heads/main' }}
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
 
 jobs:

@@ -149,6 +149,38 @@ class SpecDoc:
     KV_TOTAL = """
     Number of values stored for this key, including ones omitted by `limit`."""
 
+    LIBRARY_ROLE_ID = """
+    Role identifier that owns these files. Files for one role are not visible
+    to another role in the same project."""
+
+    LIBRARY_ID = """
+    Stable identifier assigned when the file is created. It does not change
+    when the title changes."""
+
+    LIBRARY_NAME = """
+    Display title chosen by the client. Unique for this project and role."""
+
+    LIBRARY_CONTENT = """
+    Document body, stored as written (Markdown is kept as plain text). It is
+    not extracted into profile or agent personality. At most 40000 characters."""
+
+    LIBRARY_DESCRIPTION = """
+    Required one-line summary for the file. Single line, at most 512 characters."""
+
+    LIBRARY_CATEGORY = """
+    Required file category at create time. Must be personal or business.
+    It cannot be changed later."""
+
+    LIBRARY_CREATED_AT = """
+    UTC time when this file was created."""
+
+    LIBRARY_UPDATED_AT = """
+    UTC time when this file's title, body, or summary was last overwritten."""
+
+    LIBRARY_FILES = """
+    File ids, titles, categories, one-line summaries, and update times. Bodies
+    are omitted."""
+
     SEMANTIC_METADATA_OTHER = "Additional storage metadata for the semantic feature."
 
     EPISODIC_SHORT_EPISODES = "Matched short-term episodic entries."
@@ -367,6 +399,14 @@ class Examples:
         "2026-09-07, caller claimed to be Dr Smith's office and confirmed Tuesday at 10.",
     ]
     KV_LIMIT: ClassVar[list[int]] = [5]
+    LIBRARY_ROLE_ID: ClassVar[list[str]] = ["library"]
+    LIBRARY_ID: ClassVar[list[str]] = ["8d0c1a2e-4b3f-4e1a-9c2d-6f7a8b9c0d1e"]
+    LIBRARY_NAME: ClassVar[list[str]] = ["服务范围"]
+    LIBRARY_DESCRIPTION: ClassVar[list[str]] = ["Weekday lobby and office coverage"]
+    LIBRARY_CATEGORY: ClassVar[list[str]] = ["business"]
+    LIBRARY_CONTENT: ClassVar[list[str]] = [
+        "Weekday service covers the office floors and the lobby.",
+    ]
 
 
 class RouterDoc:
@@ -443,7 +483,8 @@ class RouterDoc:
     following the same rules as project creation.
 
     This operation removes the project and all associated memories, including
-    episodes and role-scoped key-value entries, permanently from the system.
+    episodes, role-scoped key-value entries, and library files, permanently
+    from the system.
     It cannot be undone.
 
     If the project does not exist, a not-found error is returned.
@@ -559,6 +600,51 @@ class RouterDoc:
 
     Matching is an exact key lookup, not a semantic search. Results are newest
     first. `limit` defaults to 5; send null to return the full history.
+    """
+
+    CREATE_LIBRARY = """
+    Store one document for one role.
+
+    Required fields: `role_id`, `name`, `content`, `description`, and
+    `category` (`personal` or `business`). Category is fixed after create.
+    `content` may be Markdown pasted as plain text. At most 20 files are
+    allowed in each category (`personal` and `business`); a further create
+    in a full category returns 422.
+    Duplicate names in the same project and role
+    return 409 and leave existing files unchanged. Markdown is kept as plain
+    text and is not extracted into episodic or semantic memory.
+    """
+
+    UPDATE_LIBRARY = """
+    Overwrite the title, body, and summary of one library file.
+
+    Required fields: `id`, `name`, `content`, and `description`. Category is
+    not changed. Length rules match create. If the new
+    title is already used in this project and role, the request returns 409
+    and the previous file is left unchanged. If the id does not exist, the
+    request is rejected.
+    """
+
+    DELETE_LIBRARY = """
+    Delete one library file by id.
+
+    Deleting an id that is already gone succeeds.
+    """
+
+    GET_LIBRARY = """
+    Read one library file by id.
+
+    Returns the title, body, description, and category. This is an id lookup,
+    not a semantic search. If the id does not exist, a not-found error is
+    returned.
+    """
+
+    LIST_LIBRARY = """
+    List library files for one role.
+
+    Response entries contain the id, title, category, description, and last
+    update time. Document bodies are omitted. An empty list is returned when
+    the role has no files.
     """
 
     DELETE_SEMANTIC_MEMORY = """

@@ -109,6 +109,24 @@ class InvalidRerankerError(MemMachineError):
     """Exception raised for invalid reranker."""
 
 
+class LibraryNameExistsError(MemMachineError):
+    """A library file with this name already exists in the same scope."""
+
+    def __init__(self, name: str) -> None:
+        """Initialize with the conflicting file name."""
+        super().__init__(f"Library file '{name}' already exists")
+
+
+class LibraryFileLimitError(MemMachineError):
+    """A category in this scope already has the maximum number of files."""
+
+    def __init__(self, limit: int, category: str) -> None:
+        """Initialize with the per-category file limit."""
+        super().__init__(
+            f"Library allows at most {limit} files in category '{category}'"
+        )
+
+
 class EpisodicMemoryManagerClosedError(MemMachineError):
     """Exception raised when operating on a closed EpisodicMemory instance."""
 

@@ -3,9 +3,9 @@ name: Generate SBOM
 # Trigger the workflow on push and pull requests to any branch.
 on:
   release:
+  workflow_dispatch:
   push:
-    branches: [ main ]
-  pull_request:
+    branches: [main]
 
 # Cancel any preceding run on the pull request after a new commit is pushed.
 concurrency:

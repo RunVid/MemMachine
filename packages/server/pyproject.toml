@@ -80,6 +80,7 @@ packages = [
     "memmachine.episodic_memory.short_term_memory",
     "memmachine.installation",
     "memmachine.kv_store",
+    "memmachine.library_store",
     "memmachine.rest_client",
     "memmachine.server",
     "memmachine.main",

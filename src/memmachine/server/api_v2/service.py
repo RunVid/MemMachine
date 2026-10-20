@@ -14,11 +14,18 @@ from memmachine.common.api.spec import (
     AddMemoryResult,
     AppendKvSpec,
     ConsolidateMemoriesResponse,
+    ConsolidateMemoriesSpec,
+    CreateLibrarySpec,
     Episode,
     EpisodicSearchResult,
     GetKvSpec,
     KvListResponse,
     KvRecord,
+    LibraryFileResponse,
+    LibraryIdSpec,
+    LibraryListResponse,
+    LibraryNameResponse,
+    ListLibrarySpec,
     ListMemoriesSpec,
     ListResult,
     ListResultContent,
@@ -27,11 +34,14 @@ from memmachine.common.api.spec import (
     SearchResultContent,
     SemanticFeature,
     SemanticIsolation,
+    UpdateLibrarySpec,
+    _library_category,
     WriteSemanticMemoryResponse,
     WriteSemanticMemorySpec,
 )
 from memmachine.common.episode_store.episode_model import EpisodeEntry
 from memmachine.kv_store.model import KvEntry
+from memmachine.library_store.model import LibraryFile, LibraryName
 from memmachine.semantic_memory.semantic_session_manager import IsolationType
 
 
@@ -70,7 +80,9 @@ class _SessionData:
 
     @property
     def session_id(self) -> str | None:
-        return self.session_id_override if self.session_id_override else self.session_key
+        return (
+            self.session_id_override if self.session_id_override else self.session_key
+        )
 
 
 def _normalize_metadata_id(value: object | None) -> str | None:
@@ -319,7 +331,7 @@ async def _list_target_memories(
 
 
 async def _consolidate_memories(
-    spec: "ConsolidateMemoriesSpec",
+    spec: ConsolidateMemoriesSpec,
     memmachine: MemMachine,
 ) -> ConsolidateMemoriesResponse:
     """
@@ -405,13 +417,17 @@ async def _write_semantic_memory(
     )
     isolation = _SEMANTIC_ISOLATION_MAP[spec.isolation]
 
-    tag, feature_name, value, semantic_id, created = (
-        await memmachine.write_semantic_from_instruction(
-            session_data=session_data,
-            isolation=isolation,
-            category_name=spec.category,
-            instruction=spec.instruction,
-        )
+    (
+        tag,
+        feature_name,
+        value,
+        semantic_id,
+        created,
+    ) = await memmachine.write_semantic_from_instruction(
+        session_data=session_data,
+        isolation=isolation,
+        category_name=spec.category,
+        instruction=spec.instruction,
     )
     return WriteSemanticMemoryResponse(
         semantic_id=semantic_id,
@@ -456,3 +472,90 @@ async def _get_kv(spec: GetKvSpec, memmachine: MemMachine) -> KvListResponse:
         total=page.total,
     )
 
+
+def _library_file(file: LibraryFile) -> LibraryFileResponse:
+    return LibraryFileResponse(
+        id=file.id,
+        name=file.name,
+        content=file.content,
+        description=file.description,
+        category=_library_category(file.category),
+        created_at=file.created_at,
+        updated_at=file.updated_at,
+    )
+
+
+def _library_name(item: LibraryName) -> LibraryNameResponse:
+    return LibraryNameResponse(
+        id=item.id,
+        name=item.name,
+        description=item.description,
+        category=_library_category(item.category),
+        updated_at=item.updated_at,
+    )
+
+
+async def _create_library(
+    spec: CreateLibrarySpec,
+    memmachine: MemMachine,
+) -> LibraryFileResponse:
+    file = await memmachine.create_library(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        role_id=spec.role_id,
+        name=spec.name,
+        content=spec.content,
+        description=spec.description,
+        category=spec.category,
+    )
+    return _library_file(file)
+
+
+async def _update_library(
+    spec: UpdateLibrarySpec,
+    memmachine: MemMachine,
+) -> LibraryFileResponse:
+    file = await memmachine.update_library(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        role_id=spec.role_id,
+        file_id=spec.id,
+        name=spec.name,
+        content=spec.content,
+        description=spec.description,
+    )
+    return _library_file(file)
+
+
+async def _get_library(
+    spec: LibraryIdSpec,
+    memmachine: MemMachine,
+) -> LibraryFileResponse:
+    file = await memmachine.get_library(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        role_id=spec.role_id,
+        file_id=spec.id,
+    )
+    return _library_file(file)
+
+
+async def _delete_library(spec: LibraryIdSpec, memmachine: MemMachine) -> None:
+    await memmachine.delete_library(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        role_id=spec.role_id,
+        file_id=spec.id,
+    )
+
+
+async def _list_library(
+    spec: ListLibrarySpec,
+    memmachine: MemMachine,
+) -> LibraryListResponse:
+    files = await memmachine.list_library(
+        org_id=spec.org_id,
+        project_id=spec.project_id,
+        role_id=spec.role_id,
+    )
+    return LibraryListResponse(files=[_library_name(item) for item in files])

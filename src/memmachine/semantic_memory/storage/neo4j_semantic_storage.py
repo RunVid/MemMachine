@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from asyncio import Lock
 from collections.abc import Mapping
@@ -35,6 +36,8 @@ from memmachine.semantic_memory.storage.storage_base import (
     FeatureIdT,
     SemanticStorage,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_timestamp() -> float:

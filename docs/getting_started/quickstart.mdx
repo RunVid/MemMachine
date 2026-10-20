@@ -100,10 +100,24 @@ The `memmachine-compose.sh` script is your main tool for managing the server.
 ```
 
 Common commands:
-- `./memmachine-compose.sh start - Start MemMachine services
-- `./memmachine-compose.sh stop - Stop MemMachine services
-- `./memmachine-compose.sh restart - Restart MemMachine services
-- `./memmachine-compose.sh logs - Show service logs
-- `./memmachine-compose.sh clean - Remove all services and data
-- `./memmachine-compose.sh build - Build a custom MemMachine image
-- `./memmachine-compose.sh help - Show help message
+- `./memmachine-compose.sh start` - Start MemMachine services
+- `./memmachine-compose.sh stop` - Stop MemMachine services
+- `./memmachine-compose.sh restart` - Restart MemMachine services
+- `./memmachine-compose.sh logs` - Show service logs
+- `./memmachine-compose.sh clean` - Remove all services and data
+- `./memmachine-compose.sh build` - Build a custom MemMachine image
+- `./memmachine-compose.sh help` - Show help message
+
+Build and push to Artifact Registry (replace `<version-tag>`). `--gpu false` skips GPU extras, `--otel true` enables OpenTelemetry, `--platform linux/amd64` matches cloud VMs, `--push` uploads, `-f` rebuilds without cache:
+
+```bash
+./memmachine-compose.sh build \
+  us-central1-docker.pkg.dev/pineai-hk/infra/memmachine:<version-tag> \
+  --gpu false \
+  --otel true \
+  --platform linux/amd64 \
+  --push \
+  -f
+```
+
+Authenticate first: `gcloud auth configure-docker us-central1-docker.pkg.dev`. Omit `--push` to load the image locally.

@@ -110,6 +110,18 @@ The script checks Docker, creates `.env` if needed, writes `cfg.yml` (or
 ./memmachine-compose.sh clean   # removes data and volumes
 ```
 
+Build and push a production image (replace `<version-tag>`). `--gpu false` / `--otel true` are build args, `--platform linux/amd64` is the target arch, `--push` uploads, `-f` is a no-cache rebuild:
+
+```bash
+./memmachine-compose.sh build \
+  us-central1-docker.pkg.dev/pineai-hk/infra/memmachine:<version-tag> \
+  --gpu false \
+  --otel true \
+  --platform linux/amd64 \
+  --push \
+  -f
+```
+
 Python install:
 
 ```bash

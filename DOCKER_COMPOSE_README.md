@@ -105,6 +105,21 @@ curl -X POST "http://localhost:8080/v1/memories" \
 ./memmachine-compose.sh help
 ```
 
+#### Build and push an image
+Replace `<version-tag>` with the image tag (for example `0.2.3`). `--gpu false` skips GPU extras, `--otel true` turns on OpenTelemetry in the image, `--platform linux/amd64` matches typical cloud VMs, `--push` uploads to the registry, and `-f` rebuilds without cache.
+
+```bash
+./memmachine-compose.sh build \
+  us-central1-docker.pkg.dev/pineai-hk/infra/memmachine:<version-tag> \
+  --gpu false \
+  --otel true \
+  --platform linux/amd64 \
+  --push \
+  -f
+```
+
+You must already be authenticated to Artifact Registry (`gcloud auth configure-docker us-central1-docker.pkg.dev`). Omit `--push` to load the image locally instead of pushing.
+
 ### Using Docker Compose Directly
 
 #### View Logs
